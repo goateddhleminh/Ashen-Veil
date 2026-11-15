@@ -44,7 +44,7 @@ export class Combat {
     if(target.wardTime>0) amount*=.3;
     const mitigated = amount * 100 / (100 + (target.armor || 0));
     target.hp = Math.max(0, target.hp - mitigated); target.flash = .12;
-    this.onSound?.(target.enemy?'hit':'hurt');
+    this.onSound?.(target.hp === 0 ? (target.enemy ? 'kill' : 'die') : (target.enemy ? 'hit' : 'hurt'));
     this.effect(target.position, target.enemy ? 0xe9ba70 : 0xd24935, .7);
     if (!target.hp) {
       target.alive = false;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Engine } from './engine.js';
 import { FollowCamera } from './camera.js';
 import { Input } from './input.js';
-import { chooseAutomationTarget, steerToward, clearAutomationRoute } from './automation.js';
+import { chooseAutomationTarget, steerToward, clearAutomationRoute, castAutomationSkills, evadeAutomationHazards } from './automation.js';
 import { World } from './world.js';
 import { createActor, resetHero, animateActor, face } from './entities.js';
 import { updateAI } from './ai.js';
@@ -276,6 +276,10 @@ try {
     // Explicit basic attacks stand still; right mouse never chases an opponent.
     if(mode==='manual'&&input.attackHeld){hero.target.copy(hero.position);loot.selected=null;}
     loot.update(hero, dt);
+    if (mode === 'automation') {
+      evadeAutomationHazards(hero, enemies, world, dt);
+      if (castAutomationSkills(hero, enemies, combat).length) audio.play('skill');
+    }
     const distance = hero.position.distanceTo(hero.target);
     hero.moving = distance > .12 && hero.dodgeTime<=0;
     if (hero.moving) {
@@ -305,7 +309,7 @@ try {
   }
   function render(dt) {
     if (!follow) return;
-    audio.setPaused(state!=='playing'||document.hidden);
+    audio.setPaused(state!=='playing'||document.hidden, {allowDeathTail:state==='dead'&&!document.hidden});
     follow.update(hero.position, dt);
     const animationDt = state === 'playing' || state === 'ready' ? dt : 0;
     for (const actor of [hero, ...enemies]) {
@@ -321,7 +325,7 @@ try {
     loot.render(follow.camera, state === 'playing');
     engine.renderer.render(engine.scene, follow.camera);
   }
-  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'playing') togglePause(); audio.setPaused(document.hidden || state !== 'playing'); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'playing') togglePause(); audio.setPaused(document.hidden || state !== 'playing', {allowDeathTail:state==='dead'&&!document.hidden}); });
   window.addEventListener('blur', () => { if (state === 'playing') togglePause(); });
   window.addEventListener('pagehide', event => {
     persist();

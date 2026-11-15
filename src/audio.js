@@ -1,26 +1,142 @@
-// All synthesized voices pass through one bounded, player-controlled bus.
+// CC0 samples and modification details: ../AUDIO-CREDITS.md.
+const SAMPLES = Object.freeze({
+  hit: 'snd_splathit', hurt: 'player_hit', kill: 'snd_enemyscream',
+  die: 'death_2', loot: 'snd_treasure', teleport: 'snd_warp_in',
+});
+const canonical = kind => kind === 'death' ? 'die' : kind;
+
 export class GameAudio {
-  constructor(){this.context=null;this.voices=new Set();this.volume=.5;this.muted=false;this.paused=true;}
-  async unlock(){
-    try{
-      if(!this.context){const Audio=globalThis.AudioContext||globalThis.webkitAudioContext;if(!Audio)return;this.context=new Audio();this.master=this.context.createGain();this.master.connect(this.context.destination);this.updateGain();}
-      if(this.context.state==='suspended')await this.context.resume();
-    }catch{/* Audio is optional on restricted browsers. */}
+  constructor() {
+    this.context = null;
+    this.master = null;
+    this.volume = .5;
+    this.muted = false;
+    this.paused = true;
+    this.allowDeathTail = false;
+    this.disposed = false;
+    this.voices = new Set();
+    this.buffers = {};
+    this.loadPromises = {};
+    this.loadFailed = new Set();
   }
-  configure({volume,muted}){this.volume=volume;this.muted=muted;this.updateGain();}
-  setPaused(value){if(this.paused===value)return;this.paused=value;this.updateGain();}
-  updateGain(){if(this.master)this.master.gain.value=this.paused||this.muted?0:this.volume*this.volume*.18;}
-  play(kind){
-    if(!this.context||this.context.state!=='running'||this.paused||this.muted||this.volume===0||this.voices.size>=8)return false;
-    const notes={hit:[130,50,.09],skill:[440,110,.22],loot:[660,990,.12],level:[440,880,.4],hurt:[90,35,.18]};
-    const [start,end,duration]=notes[kind]||notes.hit,now=this.context.currentTime;
-    const oscillator=this.context.createOscillator(),envelope=this.context.createGain();
-    oscillator.type=kind==='hit'||kind==='hurt'?'triangle':'sine';const variation=.97+Math.random()*.06;
-    oscillator.frequency.setValueAtTime(start*variation,now);oscillator.frequency.exponentialRampToValueAtTime(end*variation,now+duration);
-    envelope.gain.setValueAtTime(0,now);envelope.gain.linearRampToValueAtTime(.5,now+.005);envelope.gain.exponentialRampToValueAtTime(.001,now+duration);
-    oscillator.connect(envelope);envelope.connect(this.master);this.voices.add(oscillator);
-    oscillator.onended=()=>{oscillator.disconnect();envelope.disconnect();this.voices.delete(oscillator);};
-    oscillator.start(now);oscillator.stop(now+duration+.01);return true;
+  async unlock() {
+    if (this.disposed) return;
+    try {
+      if (!this.context) {
+        const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
+        if (!Audio) return;
+        this.context = new Audio();
+        this.master = this.context.createGain();
+        this.master.connect(this.context.destination);
+        this.updateGain();
+        for (const kind of Object.keys(SAMPLES)) this.load(kind);
+      }
+      if (this.context.state === 'suspended') await this.context.resume();
+    } catch { /* Audio is optional on restricted browsers. */ }
   }
-  async dispose(){if(this.context){await this.context.close();this.context=null;}this.voices.clear();}
+  configure({ volume = this.volume, muted = this.muted } = {}) {
+    if (Number.isFinite(volume)) this.volume = Math.max(0, Math.min(1, volume));
+    this.muted = Boolean(muted);
+    if (this.muted || this.volume === 0) this.stopVoices();
+    this.updateGain();
+  }
+  // Only a cue already started during play may finish on the death screen.
+  // Manual pause/background callers must omit allowDeathTail (the default).
+  setPaused(value, { allowDeathTail = false } = {}) {
+    this.paused = Boolean(value);
+    this.allowDeathTail = this.paused && allowDeathTail && !globalThis.document?.hidden;
+    if (this.paused) this.stopVoices(this.allowDeathTail);
+    this.updateGain();
+  }
+  updateGain() {
+    const tail = this.allowDeathTail && [...this.voices].some(v => v.kind === 'die');
+    if (this.master) this.master.gain.value = this.muted || (this.paused && !tail) ? 0 : this.volume * this.volume * .18;
+  }
+  async load(kind) {
+    kind = canonical(kind);
+    if (this.loadPromises[kind]) return this.loadPromises[kind];
+    if (!this.context || !SAMPLES[kind] || this.disposed) return;
+    const context = this.context;
+    const url = new URL(`../assets/sfx/mono/${SAMPLES[kind]}.wav`, import.meta.url);
+    this.loadPromises[kind] = fetch(url)
+      .then(async res => {
+        if (!res.ok) throw new Error(`audio ${kind} ${res.status}`);
+        const buffer = await context.decodeAudioData(await res.arrayBuffer());
+        if (!this.disposed && this.context === context) this.buffers[kind] = buffer;
+      })
+      .catch(() => { if (!this.disposed) this.loadFailed.add(kind); });
+    return this.loadPromises[kind];
+  }
+  canPlay() {
+    return !this.disposed && this.context?.state === 'running' && !this.paused && !this.muted && this.volume > 0 && !globalThis.document?.hidden;
+  }
+  reserve(kind) {
+    if (!this.canPlay()) return false;
+    // The death cue must not be dropped behind a full combat mix.
+    if (kind === 'die') this.stopVoices();
+    return this.voices.size < 8;
+  }
+  track(source, gain, kind) {
+    const voice = { source, gain, kind };
+    this.voices.add(voice);
+    source.onended = () => this.release(voice);
+    return voice;
+  }
+  release(voice) {
+    voice.source.onended = null;
+    voice.source.disconnect();
+    voice.gain.disconnect();
+    this.voices.delete(voice);
+    this.updateGain();
+  }
+  stopVoices(keepDeath = false) {
+    for (const voice of this.voices) {
+      if (keepDeath && voice.kind === 'die') continue;
+      try { voice.source.stop(); } catch { /* Already ended. */ }
+      this.release(voice);
+    }
+  }
+  play(kind) {
+    kind = canonical(kind);
+    if (!this.buffers[kind]) return this.fallback(kind);
+    if (!this.reserve(kind)) return false;
+    const source = this.context.createBufferSource();
+    source.buffer = this.buffers[kind];
+    source.playbackRate.value = kind === 'die' ? 1 : .97 + Math.random() * .06;
+    const gain = this.context.createGain();
+    gain.gain.value = kind === 'die' ? .9 : .7;
+    source.connect(gain); gain.connect(this.master);
+    this.track(source, gain, kind);
+    source.start();
+    return true;
+  }
+  fallback(kind) {
+    kind = canonical(kind);
+    if (!this.reserve(kind)) return false;
+    const notes = { hit: [130, 50, .09], skill: [440, 110, .22], loot: [660, 990, .12], level: [440, 880, .4], hurt: [90, 35, .18], kill: [160, 40, .3], die: [120, 30, .5], teleport: [330, 660, .25] };
+    const [start, end, duration] = notes[kind] || notes.hit, now = this.context.currentTime;
+    const oscillator = this.context.createOscillator(), envelope = this.context.createGain();
+    oscillator.type = ['hit', 'hurt', 'kill', 'die'].includes(kind) ? 'triangle' : 'sine';
+    const variation = .97 + Math.random() * .06;
+    oscillator.frequency.setValueAtTime(start * variation, now);
+    oscillator.frequency.exponentialRampToValueAtTime(end * variation, now + duration);
+    envelope.gain.setValueAtTime(0, now);
+    envelope.gain.linearRampToValueAtTime(.5, now + .005);
+    envelope.gain.exponentialRampToValueAtTime(.001, now + duration);
+    oscillator.connect(envelope); envelope.connect(this.master);
+    this.track(oscillator, envelope, kind);
+    oscillator.start(now); oscillator.stop(now + duration + .01);
+    return true;
+  }
+  async dispose() {
+    this.disposed = true;
+    this.stopVoices();
+    const context = this.context;
+    this.master?.disconnect();
+    this.context = null;
+    this.master = null;
+    this.buffers = {};
+    this.loadPromises = {};
+    if (context && context.state !== 'closed') await context.close();
+  }
 }

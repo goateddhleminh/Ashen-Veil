@@ -1,10 +1,10 @@
 # Ashen Veil — The Last Embers
 
-A single-player desktop browser ARPG with three classes, a three-region campaign and repeatable expeditions. Characters, scenery and effects are procedural Three.js meshes; sound effects use WebAudio synthesis. No account, multiplayer service, build step or package installation is required to play. Three.js **0.170.0** loads from a pinned CDN, so this is not an offline distribution.
+A single-player desktop browser ARPG with three classes, a three-region campaign and repeatable expeditions. Characters, scenery and effects are procedural Three.js meshes; sound effects use locally hosted CC0 recordings with WebAudio playback and synthesized fallback cues. No account, multiplayer service, build step or package installation is required to play. Three.js **0.170.0** loads from a pinned CDN, so this is not an offline distribution.
 
 ## Run
 
-Upload `index.html`, `styles.css` and the entire `src/` directory to a static HTTP(S) host. Preserve that directory structure. GitHub Pages can deploy the repository root; upload extracted files, since GitHub's web UI does not extract ZIP files.
+Upload `index.html`, `styles.css`, `AUDIO-CREDITS.md`, and the entire `src/` and `assets/` directories to a static HTTP(S) host. Preserve that directory structure. GitHub Pages can deploy the repository root; upload extracted files, since GitHub's web UI does not extract ZIP files.
 
 For local play, run `python -m http.server 8080` in this directory if Python is installed, then open `http://localhost:8080`. Do not open through `file://`. Use a current WebGL-capable desktop browser. Mouse and keyboard are required; mobile touch controls are not implemented.
 
@@ -30,7 +30,7 @@ Return to Ember Refuge to restore life and resource and use the merchant, forge 
 | I | Inventory, filtering, merchant, forge and stash |
 | Escape | Close a panel or pause/resume |
 
-Manual is the default: movement, basic attacks and loot collection require your input. Automation seeks enemies, attacks in range and walks to collectible ground drops. Skills and potions remain available on their keys. XP is awarded for kills in both modes; it is not a ground pickup. Switch modes at any time during play using the HUD control.
+Manual is the default: movement, basic attacks and loot collection require your input. Automation seeks enemies, attacks in range, casts ready abilities when resources and targets allow, and walks to collectible ground drops. It attempts to evade enemy and boss attack warnings; dodge cooldowns, obstacles and overlapping attacks can still leave it vulnerable. Skills and potions remain available on their keys. XP is awarded for kills in both modes; it is not a ground pickup. Switch modes at any time during play using the HUD control.
 
 Travel and expedition entry take three seconds. During the countdown the character stays idle, movement and combat are locked, and additional travel requests are ignored. Arrival clears held input. Starting or recovering a character at Ember Refuge is immediate.
 

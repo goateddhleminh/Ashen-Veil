@@ -1,4 +1,60 @@
 import { WORLD } from './data.js';
+import { SKILLS, castSkill, tryDodge } from './skills.js';
+import { attackHits } from './enemy-attacks.js';
+
+// Skill readiness stays authoritative in castSkill; movement/loot targets never set aim.
+export function castAutomationSkills(hero, enemies, combat) {
+  const cast = [];
+  combat.enemies = enemies;
+  for (const skill of SKILLS[hero.classId] ?? []) {
+    let nearest = null, distance = Infinity;
+    for (const enemy of enemies) {
+      if (!enemy.active || !enemy.alive) continue;
+      const d = Math.hypot(enemy.position.x - hero.position.x, enemy.position.z - hero.position.z);
+      if (d < distance) { nearest = enemy; distance = d; }
+    }
+    const selfBuff = ['guard', 'ward'].includes(skill.effect);
+    const reach = skill.id === 'volley' ? skill.range : skill.range + skill.radius;
+    if (!selfBuff && (!nearest || distance > reach)) continue;
+    if (castSkill(hero, skill.id, nearest?.position ?? hero.position, combat).ok) cast.push(skill.id);
+  }
+  return cast;
+}
+
+// Sample short, collision-clear escape rays against the committed damage geometry.
+// A dodge travels 22 * .22 metres; validate that whole corridor before using it.
+export function evadeAutomationHazards(hero, enemies, world, dt) {
+  const plans = [];
+  for (const enemy of enemies) {
+    if (!enemy.active || !enemy.alive) continue;
+    if (enemy.windup > 0 && enemy.attackPlan) plans.push(enemy.attackPlan);
+    if (enemy.charge && !enemy.charge.hit && enemy.charge.time > 0) plans.push({
+      shape:'line', originX:enemy.position.x, originZ:enemy.position.z,
+      x:enemy.charge.x, z:enemy.charge.z, radius:.9
+    });
+  }
+  if (!plans.length || !hero.alive || hero.dodgeTime > 0) return false;
+  const hits = point => plans.some(plan => attackHits(plan, point));
+  const dx = hero.target.x - hero.position.x, dz = hero.target.z - hero.position.z;
+  const distance = Math.hypot(dx, dz), step = Math.min(distance, hero.speed * dt + .2);
+  const next = distance ? {x:hero.position.x + dx / distance * step, z:hero.position.z + dz / distance * step} : hero.position;
+  if (!hits(hero.position) && !hits(next)) return false;
+  let escape = null, direction = null;
+  for (let radius = .25; radius <= 12 && !escape; radius += .25) {
+    for (let i = 0; i < 32; i++) {
+      const angle = i * Math.PI / 16, x = Math.cos(angle), z = Math.sin(angle);
+      const point = {x:hero.position.x + x * radius, z:hero.position.z + z * radius};
+      if (hits(point) || !clearSegment(hero.position, point, world, hero.radius)) continue;
+      escape = point; direction = {x,z}; break;
+    }
+  }
+  clearAutomationRoute(hero);
+  if (!escape) { hero.target.copy(hero.position); return true; }
+  hero.target.set(escape.x, 0, escape.z);
+  const landing = {x:hero.position.x + direction.x * 4.84, z:hero.position.z + direction.z * 4.84};
+  if (hits(hero.position) && !hits(landing) && clearSegment(hero.position, landing, world, hero.radius)) tryDodge(hero, direction);
+  return true;
+}
 
 // Routes use the same obstacle resolver as movement, with a bounded search.
 const routes = new WeakMap();
