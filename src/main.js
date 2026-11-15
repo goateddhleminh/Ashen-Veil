@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Engine } from './engine.js';
 import { FollowCamera } from './camera.js';
 import { Input } from './input.js';
+import { chooseAutomationTarget, steerToward, clearAutomationRoute } from './automation.js';
 import { World } from './world.js';
 import { createActor, resetHero, animateActor, face } from './entities.js';
 import { updateAI } from './ai.js';
@@ -28,6 +29,17 @@ let engine, follow, input;
 try {
   let state = 'ready', kills = 0, spawnTimer = 0, hudTimer = 0, saveTimer = 0;
   let campaign = createRegionState(), chestOpened = false, bossSpawned = false, expedition = null;
+  let mode = 'manual', teleportRemaining = 0, pendingTravel = null;
+  function clearActions() {
+    input.clear(); clearAutomationRoute(hero); loot.selected = null; hero.target.copy(hero.position);
+    hero.moving = false; hero.dodgeTime = 0; hero.attackVisual = 0; hero.stride = 0; hero.body.position.y = 0; marker.visible = false; combat.reset();
+  }
+  function setMode(next) {
+    if (state !== 'playing' || !['manual','automation'].includes(next) || mode === next) return;
+    clearActions(); mode = next; ui.setMode(mode);
+    engine.renderer.domElement.focus({preventScroll:true});
+    ui.announce(mode === 'manual' ? 'Manual · Hold right mouse to attack. Click loot to collect.' : 'Automation · Pursuing enemies and collectible loot.');
+  }
   function persist() {
     if (state === 'ready') return;
     const result = saveClass(hero, { ...campaign, kills });
@@ -85,6 +97,8 @@ try {
   const marker = new THREE.Mesh(new THREE.RingGeometry(.32, .4, 24), new THREE.MeshBasicMaterial({ color: 0xd5c397, transparent: true, opacity: .65, side: THREE.DoubleSide, depthWrite: false }));
   marker.rotation.x = -Math.PI / 2; marker.visible = false; engine.scene.add(marker);
   input = new Input(engine.renderer.domElement, follow.camera, togglePause);
+  document.getElementById('mode-toggle').onclick = () => setMode(mode === 'manual' ? 'automation' : 'manual');
+  ui.setMode(mode);
   const shrine={used:false,mesh:world.mesh(world.cone,0x72dac7,-3,1.2,-3,.6,2.4,.6,true)};
   const chest=world.mesh(world.box,0xb99145,0,.45,-16,1.5,.9,1);
   const normalBar = enemies[0].fill.material;
@@ -106,19 +120,20 @@ try {
   function potion() { if (state === 'playing') action(() => usePotion(hero)); }
   function togglePanel() {
     if (state !== 'playing' && state !== 'inventory') return;
-    state = state === 'inventory' ? 'playing' : 'inventory'; input.clear(); loot.selected = null; hero.target.copy(hero.position); marker.visible = false; ui.setState(state); refresh();
+    state = state === 'inventory' ? 'playing' : 'inventory'; clearActions(); input.setEnabled(state === 'playing'); ui.setState(state); refresh();
   }
   function ability(index) {
     if(state!=='playing') return;
     combat.enemies=enemies;
-    const result=castSkill(hero,SKILLS[hero.classId][index].id,hero.target,combat);
+    const result=castSkill(hero,SKILLS[hero.classId][index].id,input.aimPoint() ?? hero.position,combat);
     if(result.ok)audio.play('skill');
     ui.announce(result.message); refresh();
   }
   document.querySelectorAll('[data-skill]').forEach(button=>button.onclick=()=>ability(Number(button.dataset.skill)));
   function dodge() {
     if(state!=='playing') return;
-    const result=tryDodge(hero,{x:hero.target.x-hero.position.x,z:hero.target.z-hero.position.z});
+    const aim=input.aimPoint() ?? hero.target;
+    const result=tryDodge(hero,{x:aim.x-hero.position.x,z:aim.z-hero.position.z});
     if(!result.ok) ui.announce(result.message);
   }
   document.getElementById('dodge-button').onclick=dodge;
@@ -128,6 +143,7 @@ try {
     if(event.code==='Space') { event.preventDefault(); dodge(); }
     if (event.code === 'KeyC' || event.code === 'KeyI') { event.preventDefault(); ui.selectTab(event.code === 'KeyC' ? 'character' : 'inventory'); togglePanel(); }
     if (event.code === 'KeyQ') { event.preventDefault(); potion(); }
+    if (event.code === 'KeyE' && state === 'playing') { event.preventDefault(); interact(); }
   });
   function renderJourney() {
     const root=document.getElementById('journey-list'); if(!root)return;
@@ -139,7 +155,7 @@ try {
       const label=document.createElement('p');label.textContent='Expeditions · Defeat 20 enemies and the guardian. Leaving abandons this run. Claim rewards before leaving.';root.append(label);
       const tiers=document.createElement('select');tiers.id='expedition-tier';tiers.setAttribute('aria-label','Expedition tier');
       for(let tier=1;tier<=Math.min(100,campaign.highestTier+1);tier++){const option=document.createElement('option');option.value=tier;option.textContent=`Tier ${tier}`;tiers.append(option);}root.append(tiers);
-      const launch=document.createElement('button');launch.textContent='Begin expedition';launch.onclick=()=>{const result=beginExpedition(campaign,Number(tiers.value));if(!result.ok){ui.announce(result.message);return;}travel(result.run.region,result.run);};root.append(launch);
+      const launch=document.createElement('button');launch.textContent='Begin expedition';launch.onclick=()=>{if(!['playing','inventory'].includes(state))return;const result=beginExpedition(campaign,Number(tiers.value));if(!result.ok){ui.announce(result.message);return;}travel(result.run.region,result.run);};root.append(launch);
       if(expedition){
         const info=document.createElement('p');info.textContent=`Tier ${expedition.tier} · ${expedition.kills}/20 enemies · Guardian ${expedition.boss?'defeated':'alive'} · ${expedition.modifiers.map(id=>MODIFIERS.find(m=>m.id===id).description).join(' ')} Reward: ${expedition.reward.gold} gold, ${expedition.reward.gems} gems, ${expedition.reward.diamonds} diamonds.`;root.append(info);
         const claim=document.createElement('button');claim.textContent=expedition.claimed?'Expedition reward claimed':'Claim expedition reward';claim.disabled=expedition.claimed||!expedition.boss;claim.onclick=()=>rewardRun(claimExpedition(campaign,expedition));root.append(claim);
@@ -157,7 +173,13 @@ try {
   function rewardRun(result){if(result.ok){for(const [key,value] of Object.entries(result.reward))hero.currencies[key]+=value;persist();}ui.announce(result.message);refresh();}
   function travel(id,run=null) {
     if(!['playing','inventory'].includes(state))return;
+    const checked=enterRegion({...campaign},id);if(!checked.ok){ui.announce(checked.message);return;}
+    clearActions(); input.setEnabled(false); pendingTravel={id,run}; teleportRemaining=3;
+    state='teleporting'; ui.setState(state); ui.setTeleport(teleportRemaining,REGIONS[id].name); refresh();
+  }
+  function arrive(id,run=null) {
     const result=enterRegion(campaign,id);if(!result.ok){ui.announce(result.message);return;}
+    clearActions();
     expedition=run;shrine.used=false;hero.blessingTime=0;hero.guardTime=0;hero.wardTime=0;
     loot.reset();combat.reset();input.clear();enemies.forEach(e=>{e.active=false;e.model.visible=false;});
     hero.position.set(0,0,4);hero.target.copy(hero.position);marker.visible=false;chestOpened=false;bossSpawned=false;
@@ -203,20 +225,36 @@ try {
     Object.assign(hero,createSkillState());
     saveTimer = 0; persist();
     marker.visible = false; follow.focus.copy(hero.position); follow.update(hero.position, 1);
-    travel('refuge');
+    mode='manual';ui.setMode(mode);teleportRemaining=0;pendingTravel=null;
+    arrive('refuge'); input.setEnabled(true);
     ui.setState(state); ui.announce('Ember Refuge · Open Character to choose your destination.');
     ui.update(hero, kills, enemies.filter(e => e.active).length, false);
   }
   function recover(){
     if(state!=='dead')return;
-    recoverHero(hero);state='playing';travel('refuge');ui.setState(state);persist();refresh();
+    recoverHero(hero);state='playing';arrive('refuge');input.setEnabled(true);ui.setState(state);persist();refresh();
   }
   function togglePause() {
     if (state === 'inventory') { togglePanel(); return; }
     if (state !== 'playing' && state !== 'paused') return;
-    state = state === 'playing' ? 'paused' : 'playing'; input.clear(); ui.setState(state);
+    state = state === 'playing' ? 'paused' : 'playing'; clearActions(); input.setEnabled(state === 'playing'); ui.setState(state);
+  }
+  function interact() {
+    if(state!=='playing'||campaign.region==='refuge')return;
+    if(!shrine.used&&Math.hypot(hero.position.x+3,hero.position.z+3)<2)ui.announce(activateShrine(hero,shrine).message);
+    if(!chestOpened&&Math.hypot(hero.position.x,hero.position.z+16)<2.5){chestOpened=true;hero.currencies.gold+=80*REGIONS[campaign.region].level;advanceQuest(campaign,{type:'chest',region:campaign.region});advanceExpedition(expedition,{type:'chest'});ui.announce('Reliquary opened · Gold recovered.');persist();}
   }
   function update(dt) {
+    if (state === 'teleporting') {
+      if(document.hidden)return;
+      teleportRemaining=Math.max(0,teleportRemaining-dt);
+      ui.setTeleport(teleportRemaining,REGIONS[pendingTravel.id].name);
+      if(teleportRemaining<=.000001){
+        const destination=pendingTravel;pendingTravel=null;teleportRemaining=0;
+        arrive(destination.id,destination.run);clearActions();state='playing';input.setEnabled(true);ui.setState(state);refresh();
+      }
+      return;
+    }
     if (state !== 'playing') return;
     updateSkills(hero,dt);
     if(hero.dodgeTime>0) {
@@ -224,23 +262,33 @@ try {
       hero.target.copy(hero.position);
     }
     const point = input.destination();
-    if (point) {
+    if (mode === 'automation') {
+      const target=chooseAutomationTarget(hero,enemies,loot);
+      loot.selected=target?.drop??null;
+      hero.target.copy(hero.position);
+      if(target&&Math.hypot(target.position.x-hero.position.x,target.position.z-hero.position.z)>target.stop){hero.target.set(target.position.x,0,target.position.z);}
+      marker.visible=false;
+    } else if (point) {
       loot.selected = null;
       hero.target.copy(point); world.resolve(hero.target, hero.radius);
       marker.position.copy(hero.target); marker.position.y = .07; marker.visible = true;
     }
+    // Explicit basic attacks stand still; right mouse never chases an opponent.
+    if(mode==='manual'&&input.attackHeld){hero.target.copy(hero.position);loot.selected=null;}
     loot.update(hero, dt);
     const distance = hero.position.distanceTo(hero.target);
-    hero.moving = distance > .12;
+    hero.moving = distance > .12 && hero.dodgeTime<=0;
     if (hero.moving) {
       face(hero, hero.target);
-      const step = Math.min(distance, hero.speed * dt);
-      world.move(hero, (hero.target.x - hero.position.x) / distance * step, (hero.target.z - hero.position.z) / distance * step);
+      if(mode==='automation')steerToward(hero,hero.target,world,dt);
+      else {
+        const step = Math.min(distance, hero.speed * dt);
+        world.move(hero, (hero.target.x - hero.position.x) / distance * step, (hero.target.z - hero.position.z) / distance * step);
+      }
     } else marker.visible = false;
-    if(campaign.region!=='refuge'&&!shrine.used&&Math.hypot(hero.position.x+3,hero.position.z+3)<2){ui.announce(activateShrine(hero,shrine).message);}
-    combat.update(hero, enemies, dt);
+    if(mode==='automation')interact();
+    combat.update(hero, enemies, dt, mode==='automation'||input.attackHeld);
     updateAI(enemies, hero, world, dt, (target, amount) => combat.damage(target, amount));
-    if(campaign.region!=='refuge'&&!chestOpened&&Math.hypot(hero.position.x,hero.position.z+16)<2.5){chestOpened=true;hero.currencies.gold+=80*REGIONS[campaign.region].level;advanceQuest(campaign,{type:'chest',region:campaign.region});advanceExpedition(expedition,{type:'chest'});ui.announce('Reliquary opened · Gold recovered.');persist();}
     if(campaign.region!=='refuge'&&!bossSpawned&&(expedition?expedition.kills>=expedition.target:(campaign.questProgress[`${campaign.region}-kill`]??0)>=12)){
       const enemy=spawn(true,{x:0,z:-8,kind:'melee',rank:2});
       if(enemy){const boss=BOSSES[REGIONS[campaign.region].boss];Object.assign(enemy,{bossId:REGIONS[campaign.region].boss,maxHp:boss.hp*(expedition?.healthMultiplier??1),hp:boss.hp*(expedition?.healthMultiplier??1),damage:boss.damage*(expedition?.damageMultiplier??1),rank:2,xp:400*REGIONS[campaign.region].level,active:true,alive:true});enemy.model.visible=true;enemy.model.scale.setScalar(2);enemy.position.set(0,0,-8);bossSpawned=true;ui.announce(`${boss.name} approaches.`);}
@@ -249,7 +297,7 @@ try {
     if (spawnTimer >= WORLD.spawnSeconds) { spawnTimer = 0; spawn(); }
     saveTimer += dt;
     if (saveTimer >= 10) { saveTimer = 0; persist(); }
-    if (!hero.alive) { const lost=applyDeathPenalty(hero);persist(); state = 'dead'; input.clear(); ui.setState(state); ui.announce(`Lost ${lost} gold. Equipment and progress preserved.`);marker.visible = false; }
+    if (!hero.alive) { const lost=applyDeathPenalty(hero);persist(); state = 'dead'; clearActions(); input.setEnabled(false); ui.setState(state); ui.announce(`Lost ${lost} gold. Equipment and progress preserved.`);marker.visible = false; }
     hudTimer += dt;
     if (hudTimer > .08 || state === 'dead') {
       hudTimer = 0; ui.update(hero, kills, enemies.filter(e => e.active).length, false);
@@ -284,7 +332,7 @@ try {
   ui.setState('ready'); ui.update(hero, 0, 0, false);
   document.querySelector('#loading').hidden = true;
   // Read-only diagnostic snapshots are useful for learning and automated checks.
-  window.arpg = { snapshot: () => ({ state, region:campaign.region, campaign:JSON.parse(JSON.stringify(campaign)), expedition:expedition?JSON.parse(JSON.stringify(expedition)):null, resource:hero.resource, blessingTime:hero.blessingTime, shrineUsed:shrine.used, skillCooldowns:{...hero.skillCooldowns}, dodgeCooldown:hero.dodgeCooldown, invulnerable:hero.invulnerable, classId: hero.classId, hp: hero.hp, maxHp: hero.maxHp, damage: hero.damage, armor: hero.armor, crit: hero.crit, range: hero.range, currencies: { ...hero.currencies }, potions: hero.potions, inventory: hero.inventory.map(i => ({ ...i, mods: { ...i.mods } })), equipment: JSON.parse(JSON.stringify(hero.equipment)), drops: loot.snapshot(), level: hero.level, xp: hero.xp, kills, position: hero.position.toArray(), enemies: enemies.filter(e => e.active).length, drawCalls: engine.renderer.info.render.calls, triangles: engine.renderer.info.render.triangles, geometries: engine.renderer.info.memory.geometries }) };
+  window.arpg = { snapshot: () => ({ state, mode, teleportRemaining, region:campaign.region, campaign:JSON.parse(JSON.stringify(campaign)), expedition:expedition?JSON.parse(JSON.stringify(expedition)):null, resource:hero.resource, blessingTime:hero.blessingTime, shrineUsed:shrine.used, skillCooldowns:{...hero.skillCooldowns}, dodgeCooldown:hero.dodgeCooldown, invulnerable:hero.invulnerable, classId: hero.classId, hp: hero.hp, maxHp: hero.maxHp, damage: hero.damage, armor: hero.armor, crit: hero.crit, range: hero.range, currencies: { ...hero.currencies }, potions: hero.potions, inventory: hero.inventory.map(i => ({ ...i, mods: { ...i.mods } })), equipment: JSON.parse(JSON.stringify(hero.equipment)), drops: loot.snapshot(), level: hero.level, xp: hero.xp, kills, position: hero.position.toArray(), enemies: enemies.filter(e => e.active).length, drawCalls: engine.renderer.info.render.calls, triangles: engine.renderer.info.render.triangles, geometries: engine.renderer.info.memory.geometries }) };
 } catch (error) {
   engine?.dispose(); follow?.dispose(); input?.dispose();
   const loading = document.querySelector('#loading'); loading.hidden = false;

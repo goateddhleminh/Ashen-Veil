@@ -42,13 +42,15 @@ export class UI {
     ].map(id => [id, document.getElementById(id)]));
     for(const id of ['item-filter','item-sort']) document.getElementById(id).onchange=()=>{this.inventoryFingerprint='';this.renderPanel();};
     this.buildClasses();
-    for (const root of [this.nodes.modal, this.nodes['inventory-overlay'], this.nodes['pause-button'], document.querySelector('.hero-controls')]) {
+    for (const root of [this.nodes.modal, this.nodes['inventory-overlay'], this.nodes['pause-button'], document.querySelector('.hero-controls'), document.querySelector('.combat-mode')]) {
       for (const type of ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'dblclick', 'contextmenu', 'click']) {
         root.addEventListener(type, event => event.stopPropagation());
       }
       root.addEventListener('keydown', event => {
         // Main owns all game shortcuts, including panel dismissal.
         if (event.key === 'Tab' && ['ready', 'paused', 'dead', 'inventory'].includes(this.state)) this.trapFocus(event);
+        const gameplayKey=['Digit1','Digit2','Digit3','Space','KeyE'].includes(event.code);
+        if(this.state==='playing'&&gameplayKey){event.preventDefault();return;}
         if (!['escape', 'c', 'i', 'q'].includes(event.key.toLowerCase())) event.stopPropagation();
       });
       root.addEventListener('keyup', event => event.stopPropagation());
@@ -224,19 +226,33 @@ export class UI {
     return card;
   }
 
+  setMode(mode) {
+    const automatic=mode==='automation';
+    document.getElementById('mode-label').textContent=automatic?'Automation':'Manual';
+    const button=document.getElementById('mode-toggle');button.textContent=automatic?'Switch to manual':'Enable automation';button.setAttribute('aria-pressed',String(automatic));
+    document.getElementById('mode-instruction').textContent=automatic?'Pursues foes and collectible loot · 1/2/3: skills · Switch to take control':'Left click: move · Right hold: attack · Click loot: collect · E: interact';
+  }
+  setTeleport(remaining,destination) {
+    const node=document.getElementById('teleport-status');
+    const text=`Teleporting to ${destination} · ${Math.ceil(remaining)}s`;
+    if(node.textContent!==text)node.textContent=text;
+  }
   setState(state) {
-    if (!['ready', 'playing', 'paused', 'dead', 'inventory'].includes(state) || state === this.state) return;
+    if (!['ready', 'playing', 'paused', 'dead', 'inventory', 'teleporting'].includes(state) || state === this.state) return;
     this.state = state; document.body.dataset.state = state;
     this.refreshSaves();
     const playing = state === 'playing', inventory = state === 'inventory';
-    this.nodes.modal.hidden = playing || inventory; this.nodes['inventory-overlay'].hidden = !inventory;
+    this.nodes.modal.hidden = playing || inventory || state === 'teleporting'; this.nodes['inventory-overlay'].hidden = !inventory;
+    document.getElementById('teleport-status').hidden=state!=='teleporting';
+    document.getElementById('mode-toggle').disabled=!playing;
     this.nodes['pause-button'].disabled = !playing; this.nodes.hud.inert = !playing;
     document.getElementById('game').inert = !playing;
+    if (state === 'teleporting') { document.activeElement?.blur(); return; }
     if (playing) { document.getElementById('game').focus({ preventScroll: true }); return; }
     if (inventory) { this.renderPanel(); this.nodes[`${this.activeTab}-tab`].focus({ preventScroll: true }); return; }
     this.nodes['class-selection'].hidden = state !== 'ready';
     const copy = {
-      ready: ['A light where none remains', 'ASHEN VEIL', 'Choose your calling and begin in Ember Refuge.\nOpen Character to travel, track quests and claim rewards. Defeat three guardians to unlock expeditions.', 'Begin journey', 'Click to move · 1/2/3 Skills · Space Dodge · C Character · I Inventory · Q Potion'],
+      ready: ['A light where none remains', 'ASHEN VEIL', 'Choose your calling and begin in Ember Refuge.\nOpen Character to travel, track quests and claim rewards. Defeat three guardians to unlock expeditions.', 'Begin journey', 'Manual: left click to move · Hold right mouse to attack · E Interact · 1/2/3 Skills · Space Dodge · C Character · I Inventory · Q Potion'],
       paused: ['A moment between shadows', 'THE VEIL WAITS', 'Rest your weapon, wanderer.\nThe world will be here when you return.', 'Resume journey', 'Your journey is paused.'],
       dead: ['Even embers fall to ash', 'YOU HAVE FALLEN', 'Return to Ember Refuge with your equipment and progress intact.\nDeath costs 10% of carried gold, up to 500 gold.', 'Return to refuge', 'Active encounters and expedition progress reset.'],
     }[state];

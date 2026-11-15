@@ -10,7 +10,7 @@ For local play, run `python -m http.server 8080` in this directory if Python is 
 
 ## Your journey
 
-Choose Warrior, Mage or Archer and begin in Ember Refuge. Press **C**, travel to the Forgotten Graveyard, then close the panel. Each combat region has three objectives: defeat 12 enemies, reach the chest marked C on the map, and defeat its guardian. Claim the kill and chest quests before claiming the guardian reward. That reward opens the next region: Cinder Marsh, then Hollow Citadel. Claim the final quest to unlock expeditions.
+Choose Warrior, Mage or Archer and begin in Ember Refuge. Press **C** and travel to the Forgotten Graveyard. Travel closes the panel and begins a three-second countdown. Each combat region has three objectives: defeat 12 enemies, reach the chest marked C on the map, and defeat its guardian. Claim the kill and chest quests before claiming the guardian reward. That reward opens the next region: Cinder Marsh, then Hollow Citadel. Claim the final quest to unlock expeditions.
 
 Return to Ember Refuge to restore life and resource and use the merchant, forge and personal stash. Death retains equipment and progress, deducts 10% of carried gold (maximum 500), and offers recovery at the refuge. Travel regenerates encounters and clears ground drops and temporary blessings. Leaving an expedition abandons its unclaimed rewards.
 
@@ -18,14 +18,21 @@ Return to Ember Refuge to restore life and resource and use the merchant, forge 
 
 | Input | Action |
 | --- | --- |
-| Click / hold left mouse | Move / steer; basic attacks happen automatically in range |
+| Automation / Manual switch | Change control mode; clears previous movement and held attack input |
+| Click / hold left mouse | Move / steer in Manual mode |
+| Hold right mouse | Basic attack nearby enemies in Manual mode; does not chase them |
 | Click a ground label | Walk to and collect that drop |
-| 1 / 2 / 3 | Class abilities, aimed toward the movement destination where applicable |
-| Space | Dodge toward the destination, or in the default direction when stationary |
+| 1 / 2 / 3 | Class abilities, aimed toward the mouse pointer where applicable |
+| Space | Dodge toward the mouse pointer |
+| E | Open a nearby chest or activate a nearby shrine in Manual mode |
 | Q | Healing potion: restores 45% maximum life; no consumption at full health |
 | C | Character, travel, quests, talents and equipment |
 | I | Inventory, filtering, merchant, forge and stash |
 | Escape | Close a panel or pause/resume |
+
+Manual is the default: movement, basic attacks and loot collection require your input. Automation seeks enemies, attacks in range and walks to collectible ground drops. Skills and potions remain available on their keys. XP is awarded for kills in both modes; it is not a ground pickup. Switch modes at any time during play using the HUD control.
+
+Travel and expedition entry take three seconds. During the countdown the character stays idle, movement and combat are locked, and additional travel requests are ignored. Arrival clears held input. Starting or recovering a character at Ember Refuge is immediate.
 
 Panels pause combat, regeneration, buffs, cooldowns and consumable use. Switching tabs/windows pauses the game. Settings on the title/pause menu control volume, mute, shadows/resolution and reduced motion. Reduced motion removes body bobbing and decorative CSS animation while preserving combat cues.
 
@@ -51,12 +58,12 @@ Saves belong to the browser profile and website origin. Private browsing or bloc
 
 `src/main.js` composes the game and session states. Rendering and movement live in `engine.js`, `camera.js`, `input.js`, `world.js` and `entities.js`. Combat uses `combat.js`, `ai.js`, `enemy-attacks.js`, `telegraphs.js`, `skills.js` and `recovery.js`. Progression uses `progression.js`, `items.js`, `talents.js`, `economy.js` and `loot.js`. Campaign systems are `regions.js`, `quests.js`, `expeditions.js`, `shrines.js` and `region-map.js`. `save.js`, `settings.js`, `audio.js` and `ui.js` handle persistence and presentation. `data.js` holds shared balance constants.
 
-The simulation uses a fixed 60 Hz step, 16 pooled enemies, 32 pooled ground drops and pooled combat effects. Region scenery is prebuilt and switched on travel. Movement slides along obstacles but does not find paths around clusters; steer manually when blocked. `window.arpg.snapshot()` exposes read-only diagnostic values.
+The simulation uses a fixed 60 Hz step, 16 pooled enemies, 32 pooled ground drops and pooled combat effects. Region scenery is prebuilt and switched on travel. Manual movement slides along obstacles; Automation uses bounded pathfinding around props. `window.arpg.snapshot()` exposes read-only diagnostic values.
 
 ## Verification and limitations
 
 Optional developer tests require Node and Python Playwright; those tools are not part of the playable distribution. Run `node tests/<name>_check.mjs` for each pure suite. Browser scripts run from the project root and use port 8087, so run them sequentially. Their Chromium executable and optional local tooling paths may need adjusting on another machine.
 
-Run `python tests/phase3_browser.py` for the current 15-script browser acceptance suite. Current checks cover skills, timed barrage damage, economy, persistence, recovery, shrines, settings/audio, enemy telegraphs, travel, layout bounds, and campaign/expedition completion. `tests/completion_browser.py` accelerates damage through test-only browser injection: it verifies reward and unlock wiring, not difficulty or playtime. `tests/performance_browser.py` runs a five-minute stress fixture and writes resource counts. Historical Phase 1/2 browser scripts describe older flows and need migration before being treated as current acceptance tests.
+Run `python tests/phase3_browser.py` for the current browser acceptance suite, including the Automation/Manual and teleport regression checks. Current checks cover skills, timed barrage damage, economy, persistence, recovery, shrines, settings/audio, enemy telegraphs, travel, layout bounds, and campaign/expedition completion. `tests/completion_browser.py` accelerates damage through test-only browser injection: it verifies reward and unlock wiring, not difficulty or playtime. `tests/performance_browser.py` runs a five-minute stress fixture and writes resource counts. Historical Phase 1/2 browser scripts describe older flows and need migration before being treated as current acceptance tests.
 
 Measured layout bounds pass at 1280×720, 1920×1080, 2560×1080 and 720×720. Screenshot-based visual review and a full normal-speed campaign balance playtest remain outstanding. No campaign-duration, universal frame-rate, audio loudness or production-quality claim is made. Changes are local until explicitly published.

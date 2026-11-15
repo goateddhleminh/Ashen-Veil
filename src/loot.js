@@ -43,6 +43,9 @@ export class Loot {
     drop.label.textContent = drop.item ? drop.item.name : `${drop.amount} ${kind === 'potion' ? 'Healing potion' : kind}`;
     drop.active = true; drop.mesh.visible = drop.beam.visible = true;
   }
+  canCollect(hero, drop) {
+    return drop.active && (drop.kind !== 'gear' || hero.inventory.length < 24) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
+  }
   update(hero, dt) {
     this.time += dt;
     const drop = this.selected;

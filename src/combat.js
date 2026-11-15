@@ -51,12 +51,12 @@ export class Combat {
       if (target.enemy) { target.active = false; target.model.visible = false; this.onKill(target); }
     }
   }
-  update(hero, enemies, dt) {
+  update(hero, enemies, dt, attackRequested = false) {
     this.enemies = enemies;
     if(hero.alive)advanceBursts(this.bursts,dt,b=>this.applySkill(b.hero,b.skill,b.point));
     else this.bursts.length=0;
     hero.cooldown = Math.max(0, hero.cooldown - dt);
-    if (hero.alive && hero.cooldown <= 0) {
+    if (attackRequested && hero.alive && hero.cooldown <= 0) {
       let nearest = null, distance = hero.range;
       for (const enemy of enemies) {
         if (!enemy.active) continue;

@@ -36,8 +36,8 @@
       <div class="vitality-copy"><span class="eyebrow">Vitality</span><span class="hero-name">The Wanderer</span><span class="hero-level">Level <b id="level">1</b></span></div>
     </section>
     <section class="combat-hud" aria-label="Combat and experience">
-      <div class="combat-mode"><span class="blade-icon" aria-hidden="true">†</span><div><span class="eyebrow">Steel answers the darkness</span><strong>Auto attack <span class="status-dot" aria-hidden="true"></span></strong></div></div>
-      <p class="move-instruction"><span class="mouse-icon" aria-hidden="true"></span> Click or hold to move <span class="instruction-divider">·</span> Strike nearby foes automatically</p>
+      <div class="combat-mode"><span class="blade-icon" aria-hidden="true">†</span><div><span class="eyebrow">Steel answers the darkness</span><strong id="mode-label">Manual</strong><button id="mode-toggle" type="button" aria-pressed="false">Enable automation</button></div></div>
+      <p class="move-instruction" id="mode-instruction">Left click: move · Right hold: attack · Click loot: collect · E: interact</p>
       <div class="xp-label"><span>Experience</span><span id="xp-text">0 / 100</span></div>
       <div id="xp-meter" class="xp-track" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-fill"></div></div>
     </section>
@@ -47,6 +47,7 @@
       <div class="hero-buttons"><button id="character-button" type="button">Character <kbd>C</kbd></button><button id="inventory-button" type="button">Inventory <kbd>I</kbd></button><button id="potion-button" type="button">Potion <b id="potions">0</b> <kbd>Q</kbd></button></div>
     </nav>
   </div>
+  <div id="teleport-status" role="status" aria-live="polite" hidden></div>
   <div id="modal" class="modal-backdrop">
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
       <div class="sigil" aria-hidden="true"><span>†</span></div>
@@ -58,7 +59,7 @@
       <button id="modal-action" class="primary-button" type="button">Enter the graveyard <span aria-hidden="true">↗</span></button>
       <div id="save-controls"><button id="continue-game" type="button" disabled>Continue character</button><button id="export-save" type="button">Export save</button><button id="import-save" type="button">Import save</button><input id="save-file" type="file" accept="application/json,.json" hidden><p id="save-status" role="status"></p></div>
       <details id="settings-panel"><summary>Settings</summary><label>Visual quality <select id="quality-setting"><option value="high">High · shadows</option><option value="low">Low · no shadows</option></select></label><label><input id="motion-setting" type="checkbox"> Reduced motion</label><label>Volume <input id="volume-setting" type="range" min="0" max="1" step="0.05"></label><label><input id="mute-setting" type="checkbox"> Mute audio</label><p id="settings-status" role="status"></p></details>
-      <p id="modal-hint" class="modal-hint">Click to move. Your blade knows the rest.</p>
+      <p id="modal-hint" class="modal-hint">Manual by default · Hold right mouse to attack · E to interact.</p>
     </section>
   </div>
   <div id="inventory-overlay" class="modal-backdrop" hidden>
