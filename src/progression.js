@@ -16,6 +16,9 @@
  * No rendering imports, DOM, storage or engine effects; caller owns hero state.
  */
 
+import { TALENTS } from './talents.js';
+import { AFFIXES, LEGENDARIES } from './items.js';
+
 export const CLASSES = Object.freeze({
   warrior: { name: 'Warrior', description: 'A durable melee fighter.', color: '#c45b4f', stats: { strength: 12, intelligence: 5, dexterity: 7, vitality: 12 }, speed: 6, range: 2.15, attackSeconds: .68, primary: 'strength' },
   mage: { name: 'Mage', description: 'A spellcaster with potent intellect.', color: '#6f7ed8', stats: { strength: 5, intelligence: 14, dexterity: 7, vitality: 8 }, speed: 5.2, range: 8, attackSeconds: .9, primary: 'intelligence' },
@@ -27,8 +30,10 @@ export const RARITIES = Object.freeze({
   rare: { name: 'Rare', color: '#d7b448' }, legendary: { name: 'Legendary', color: '#e27b35' }
 });
 
-const slots = ['weapon', 'armor'];
+export const slots = ['weapon', 'armor', 'helm', 'gloves', 'boots', 'ring'];
 let nextItemId = 1;
+// A page-specific namespace keeps newly dropped items distinct from loaded gear.
+const itemNamespace = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 const n = (v, fallback = 0) => typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 const validClass = id => Object.hasOwn(CLASSES, id ?? '') ? id : 'warrior';
 const validSlot = slot => slots.includes(slot) ? slot : 'weapon';
@@ -38,20 +43,20 @@ export function createItem(classId, level = 1, rarity, slot) {
   const itemLevel = Math.min(100, Math.max(1, Math.floor(n(level, 1))));
   const roll = Math.random();
   const chosenRarity = Object.hasOwn(RARITIES, rarity ?? '') ? rarity : (roll < .6 ? 'common' : roll < .87 ? 'magic' : roll < .98 ? 'rare' : 'legendary');
-  const itemSlot = validSlot(slot || (Math.random() < .55 ? 'weapon' : 'armor'));
+  const itemSlot = validSlot(slot || slots[Math.floor(Math.random() * slots.length)]);
   const scale = itemLevel * ({ common: 1, magic: 1.35, rare: 1.8, legendary: 2.5 }[chosenRarity]);
   const mods = { damage: 0, armor: 0, life: 0, strength: 0, intelligence: 0, dexterity: 0, vitality: 0, crit: 0 };
   if (itemSlot === 'weapon') mods.damage = Math.max(1, Math.round(scale * 2.2));
   else { mods.armor = Math.max(1, Math.round(scale * 2.4)); mods.life = Math.round(scale * 3); }
   const affixCount = { common: 0, magic: 1, rare: 2, legendary: 3 }[chosenRarity];
-  const affixes = ['strength', 'intelligence', 'dexterity', 'vitality', 'crit'];
+  const affixes = Object.keys(AFFIXES);
   for (let i = 0; i < affixCount; i++) {
     const key = affixes[(Math.floor(Math.random() * affixes.length) + i) % affixes.length];
     mods[key] += key === 'crit' ? Math.max(1, Math.round(scale * 0.8)) : Math.max(1, Math.round(scale * .65));
   }
   if (chosenRarity === 'legendary') mods.lifeOnHit = Math.max(2, Math.round(scale * .6));
-  const label = itemSlot === 'weapon' ? ({ warrior: 'Blade', mage: 'Staff', archer: 'Bow' }[classKey] || 'Blade') : 'Mail';
-  return { id: `item-${nextItemId++}`, name: `${RARITIES[chosenRarity].name} ${label}`, slot: itemSlot, rarity: chosenRarity, level: itemLevel, mods, classId: itemSlot === 'armor' ? null : classKey };
+  const label = itemSlot === 'weapon' ? ({ warrior: 'Blade', mage: 'Staff', archer: 'Bow' }[classKey] || 'Blade') : ({armor:'Mail',helm:'Crown',gloves:'Grips',boots:'Treads',ring:'Signet'}[itemSlot]);
+  return { id: `item-${itemNamespace}-${nextItemId++}`, name: `${RARITIES[chosenRarity].name} ${label}`, slot: itemSlot, rarity: chosenRarity, level: itemLevel, mods, legendary: chosenRarity === 'legendary' ? Object.keys(LEGENDARIES)[Math.floor(Math.random()*6)] : null, classId: itemSlot !== 'weapon' ? null : classKey };
 }
 
 export function recomputeStats(hero) {
@@ -64,16 +69,20 @@ export function recomputeStats(hero) {
     damage += n(item.mods.damage); armor += n(item.mods.armor); life += n(item.mods.life); crit += n(item.mods.crit); lifeOnHit += n(item.mods.lifeOnHit);
     for (const key of Object.keys(stats)) stats[key] += n(item.mods[key]);
   }
+  const bonuses={damage:0,life:0,armor:0,crit:0,lifeOnHit:0,speed:0};
+  for(const node of TALENTS[validClass(hero.classId)]) bonuses[node.stat]+=Math.min(node.maxRank,Math.max(0,n(hero.talents?.[node.id])))*node.value;
+  damage+=bonuses.damage;life+=bonuses.life;armor+=bonuses.armor;crit+=bonuses.crit;lifeOnHit+=bonuses.lifeOnHit;
   const cls = CLASSES[validClass(hero.classId)];
+  hero.legendaryEffects = [...new Set(Object.values(hero.equipment||{}).map(item=>item?.legendary).filter(id=>Object.hasOwn(LEGENDARIES,id??'')))];
   hero.stats = stats;
   hero.damage = Math.max(1, Math.round(damage + stats[cls.primary] * 2));
-  hero.lifeOnHit = Math.max(0, lifeOnHit);
+  hero.lifeOnHit = Math.max(0, lifeOnHit) + (hero.legendaryEffects.includes('blood')?3:0);
   hero.maxHp = Math.max(1, Math.round(50 + stats.vitality * 10 + life));
   hero.armor = Math.max(0, Math.round(armor + stats.vitality * .5));
   hero.crit = Math.min(100, Math.max(0, 5 + stats.dexterity * .5 + crit));
-  hero.speed = Math.max(0, cls.speed + stats.dexterity * .03);
+  hero.speed = Math.max(0, cls.speed + stats.dexterity * .03 + bonuses.speed);
   hero.range = cls.range;
-  hero.attackSeconds = cls.attackSeconds;
+  hero.attackSeconds = cls.attackSeconds * (hero.legendaryEffects.includes('haste')?.85:1);
   hero.hp = Math.max(0, Math.min(n(hero.hp), hero.maxHp));
   return hero;
 }
@@ -82,6 +91,8 @@ export function initializeProgression(hero, classId) {
   if (!hero || typeof hero !== 'object') return hero;
   hero.classId = validClass(classId); hero.baseStats = { ...CLASSES[hero.classId].stats };
   hero.equipment = { weapon: createItem(hero.classId, 1, 'common', 'weapon'), armor: createItem(hero.classId, 1, 'common', 'armor') };
+  hero.stash = []; hero.talents = {}; hero.talentPoints = 0;
+  for(const slot of slots) hero.equipment[slot] ??= null;
   hero.inventory = []; hero.currencies = { gold: 0, gems: 0, diamonds: 0 }; hero.potions = 3; hero.statPoints = 0;
   hero.hp = 1; recomputeStats(hero); hero.hp = hero.maxHp; hero.alive = true; return hero;
 }

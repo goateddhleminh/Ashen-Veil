@@ -1,60 +1,62 @@
-# Ashen Veil — Phase 2: Classes & Loot
+# Ashen Veil — The Last Embers
 
-A playable desktop browser ARPG foundation. All scenery and characters are procedural Three.js meshes; the only network dependency is Three.js **0.170.0**, pinned in the import map. No asset downloads, package installation, bundler, or build step is required to play.
+A single-player desktop browser ARPG with three classes, a three-region campaign and repeatable expeditions. Characters, scenery and effects are procedural Three.js meshes; sound effects use WebAudio synthesis. No account, multiplayer service, build step or package installation is required to play. Three.js **0.170.0** loads from a pinned CDN, so this is not an offline distribution.
 
 ## Run
 
-Upload `index.html`, `styles.css`, and `src/` together to any static HTTP(S) host (GitHub Pages, Netlify, or an itch.io HTML5 upload). Open the hosted URL in a current desktop Chrome, Edge, or Firefox with WebGL enabled. An internet connection is needed for the Three.js CDN.
+Upload `index.html`, `styles.css` and the entire `src/` directory to a static HTTP(S) host. Preserve that directory structure. GitHub Pages can deploy the repository root; upload extracted files, since GitHub's web UI does not extract ZIP files.
 
-For optional local testing, if Python is already installed, run `python -m http.server 8080` in this folder and visit `http://localhost:8080`. Opening `index.html` through `file://` does not work reliably with ES modules. No server-side game logic is used.
+For local play, run `python -m http.server 8080` in this directory if Python is installed, then open `http://localhost:8080`. Do not open through `file://`. Use a current WebGL-capable desktop browser. Mouse and keyboard are required; mobile touch controls are not implemented.
 
-## Controls and test checklist
+## Your journey
 
-1. Choose **Warrior**, **Mage**, or **Archer**, then click **Enter the graveyard**. Warrior cleaves a second nearby target; Mage casts splash bolts; Archer fires fast single-target arrows. Nine undead appear around the hero.
-2. Click the floor to move to that location; hold the left mouse button and move the pointer to steer continuously. Headstones and trees block movement; the hero slides along their edges. Movement is direct steering, not route finding around whole clusters.
-3. Approach an undead. The hero automatically attacks within class range. Undead raise their weapon before impact; step out of range to evade. Larger blue-bar champions and gold-bar elites are tougher and favor better equipment drops.
-4. Kills award XP and one weighted ground drop: gold, gems, diamonds, potions, or class-appropriate gear. Click a loot label to walk toward it and collect within reach. Obstacles may require manually steering around them. Level-ups restore life and add 2 vitality and 2 primary attribute; XP overflow carries over.
-5. Press **C** for Character or **I** for Inventory. Combat freezes while browsing. Equip/unequip weapon and armor cards; comparisons show modifier differences. Equipment changes never heal. The pack holds 24 items; swaps work even when full. Close with C, I, Escape, the close button, or a click outside.
-6. Press **Q** or click the potion button to restore 45% maximum life. Full-health use consumes nothing. Gold, gems and diamonds are collectible counters in this phase; spending comes later.
-7. Press **Esc** or click pause. Combat and movement freeze. Resume using Esc or the dialog button. Switching away also pauses the game.
-8. Let enemies defeat you. **Rise again** resets the hero, XP, kills, enemies, and effects for a fresh session.
-9. Resize the browser. The camera projection and HUD adapt without stretching the scene. Recommended viewport: at least 1024 × 700.
-10. Play several minutes: new enemies spawn every 3.4 seconds, capped at 16. No new character geometry is allocated during respawning or restarting.
+Choose Warrior, Mage or Archer and begin in Ember Refuge. Press **C**, travel to the Forgotten Graveyard, then close the panel. Each combat region has three objectives: defeat 12 enemies, reach the chest marked C on the map, and defeat its guardian. Claim the kill and chest quests before claiming the guardian reward. That reward opens the next region: Cinder Marsh, then Hollow Citadel. Claim the final quest to unlock expeditions.
 
-## Source tree
+Return to Ember Refuge to restore life and resource and use the merchant, forge and personal stash. Death retains equipment and progress, deducts 10% of carried gold (maximum 500), and offers recovery at the refuge. Travel regenerates encounters and clears ground drops and temporary blessings. Leaving an expedition abandons its unclaimed rewards.
 
-```text
-index.html          Page, pinned import map, HUD and menu markup
-styles.css          Gothic HUD, health globe, dialogs, responsive layout
-src/
-  main.js           Composition, session states, spawning, movement
-  data.js           Hero/enemy balance and XP curve
-  engine.js         Renderer, fixed-step loop and GPU cleanup
-  camera.js         Fixed 56.9° orthographic follow camera and resize
-  input.js          Mouse raycasting, held input, Escape, listener cleanup
-  world.js          Procedural graveyard, instanced path, spatial collisions
-  entities.js       Procedural models, actor state and animation
-  ai.js             Undead chase, windup, impact and crowd separation
-  combat.js         Auto-targeting, damage, pooled rings and XP
-  ui.js             Class selection, cached HUD, character/inventory panels
-  progression.js    Pure classes, items, derived stats, equipment and potions
-  loot.js           32 pooled ground drops, labels and click collection
-```
+## Controls
 
-## Engineering notes
+| Input | Action |
+| --- | --- |
+| Click / hold left mouse | Move / steer; basic attacks happen automatically in range |
+| Click a ground label | Walk to and collect that drop |
+| 1 / 2 / 3 | Class abilities, aimed toward the movement destination where applicable |
+| Space | Dodge toward the destination, or in the default direction when stationary |
+| Q | Healing potion: restores 45% maximum life; no consumption at full health |
+| C | Character, travel, quests, talents and equipment |
+| I | Inventory, filtering, merchant, forge and stash |
+| Escape | Close a panel or pause/resume |
 
-Simulation runs at 60 fixed updates per second; rendering uses `setAnimationLoop` and frame-rate-independent camera smoothing. Stalls are capped at 100 ms, and hidden tabs do not advance the game. Pixel ratio is capped at 1.5. The graveyard path uses an instanced mesh. Enemy models and effects are bounded pools. Static obstacles use a spatial hash; the 16-enemy crowd uses bounded pair separation. Shared GPU resources are disposed once on teardown.
+Panels pause combat, regeneration, buffs, cooldowns and consumable use. Switching tabs/windows pauses the game. Settings on the title/pause menu control volume, mute, shadows/resolution and reduced motion. Reduced motion removes body bobbing and decorative CSS animation while preserving combat cues.
 
-Enemy attacks commit to a 0.42-second windup and re-check range at impact. The hero auto-attacks while moving. Healing comes from level-ups, potions and legendary life-on-hit equipment. Armor uses damage × 100 / (100 + armor); critical hits deal 1.75× damage. Equipment recalculates from base attributes and never heals. Ground drops cap at 32; overflow converts to gold. There is no selling or discarding yet, so a full pack can swap gear but cannot collect additional gear. The session is an endless survival encounter, with no win condition yet. The camera follows the hero inside a bounded clearing. Props and layout are generated in code with a repeatable seed; spawn locations vary each run.
+## Builds and loot
 
-Open the browser console and call `arpg.snapshot()` for a read-only report of state, position, health, XP, kills, active enemies, draw calls, triangles, and geometry count. It does not expose mutable game objects.
+- Three classes with distinct basic attacks and three abilities each; resource regenerates during play. Archer volley pierces a corridor, while barrage lands three timed area pulses.
+- Six talent nodes per class, three ranks each; level-ups award one talent point and two attribute points. Level cap: **30**. Excess XP at the cap is discarded.
+- Six equipment slots: weapon, armor, helm, gloves, boots and ring. Four rarities, eight attribute/affix types and six legendary properties.
+- Inventory holds 24 items; each class has a 48-item stash. Favoriting protects items from sale and salvage. Equip comparisons, sorting and filtering help manage gear.
+- Sell gear for gold, salvage it for gems, purchase potions or magic equipment, and upgrade items up to five times using gold, gems and later diamonds. Refund talent ranks at the refuge for gold.
+- Armor reduces damage by `100 / (100 + armor)`. Equipment changes never heal. Legendary properties affect basic-hit healing, skill damage, slowing, damage reduction, resource regeneration or attack speed.
+- Shrines grant 30 seconds of doubled base resource regeneration, once per visit. Their duration pauses with gameplay.
 
-## Phase boundaries
+Expeditions unlock after the campaign. Defeat 20 enemies and a guardian, then claim the completion reward before leaving. Clear a tier to unlock the next (up to 100). Six modifier types rotate in pairs; three bounty types offer additional claimable currency rewards. Highest cleared tier persists; the active encounter does not.
 
-Phase 2 brings the approved class/equipment/loot slice forward: three classes, distinct auto-attacks, attributes, two equipment slots, four gear rarities, collectible currencies and potions, tougher undead, and a paused character/inventory overlay. Currencies cannot be spent yet. There is no save/load: refreshing or restarting starts a new run. Active skills, vendors, salvage, drag-and-drop inventory, more maps/bosses, audio and persistence remain outside this slice.
+## Saving
 
-## Developer verification
+Characters save separately by class in browser local storage. Autosave runs during play and after important transactions, quests and death. Continue returns to the refuge. New Game asks before replacing an existing class save. Export a JSON backup from the title screen before clearing browser data or moving to another device/host. Import validates the selected class and asks before replacing its save; it does not merge items or rewards.
 
-`node tests/progression_check.mjs` validates pure progression rules. `python tests/phase2_browser.py` uses optional local Playwright tools to check every class, ground loot collection, equip/unequip, pause and restart. Its deterministic route overrides exist only in the test browser, never in shipped game code. Runtime deployment excludes developer tooling.
+Saves belong to the browser profile and website origin. Private browsing or blocked/full storage can prevent persistence; errors are displayed in-game. A previous valid save is retained as a fallback. Settings use a separate key. Ground loot, temporary buffs and unfinished expedition progress are not saved.
 
-For GitHub Pages upload the **extracted contents** of `ashen-veil-phase-2.zip` to the repository root, preserving `src/`. GitHub's web UI does not extract ZIP uploads. Set Pages to deploy the main branch root. This package updates local source only; it does not publish to GitHub automatically.
+## Source layout
+
+`src/main.js` composes the game and session states. Rendering and movement live in `engine.js`, `camera.js`, `input.js`, `world.js` and `entities.js`. Combat uses `combat.js`, `ai.js`, `enemy-attacks.js`, `telegraphs.js`, `skills.js` and `recovery.js`. Progression uses `progression.js`, `items.js`, `talents.js`, `economy.js` and `loot.js`. Campaign systems are `regions.js`, `quests.js`, `expeditions.js`, `shrines.js` and `region-map.js`. `save.js`, `settings.js`, `audio.js` and `ui.js` handle persistence and presentation. `data.js` holds shared balance constants.
+
+The simulation uses a fixed 60 Hz step, 16 pooled enemies, 32 pooled ground drops and pooled combat effects. Region scenery is prebuilt and switched on travel. Movement slides along obstacles but does not find paths around clusters; steer manually when blocked. `window.arpg.snapshot()` exposes read-only diagnostic values.
+
+## Verification and limitations
+
+Optional developer tests require Node and Python Playwright; those tools are not part of the playable distribution. Run `node tests/<name>_check.mjs` for each pure suite. Browser scripts run from the project root and use port 8087, so run them sequentially. Their Chromium executable and optional local tooling paths may need adjusting on another machine.
+
+Run `python tests/phase3_browser.py` for the current 15-script browser acceptance suite. Current checks cover skills, timed barrage damage, economy, persistence, recovery, shrines, settings/audio, enemy telegraphs, travel, layout bounds, and campaign/expedition completion. `tests/completion_browser.py` accelerates damage through test-only browser injection: it verifies reward and unlock wiring, not difficulty or playtime. `tests/performance_browser.py` runs a five-minute stress fixture and writes resource counts. Historical Phase 1/2 browser scripts describe older flows and need migration before being treated as current acceptance tests.
+
+Measured layout bounds pass at 1280×720, 1920×1080, 2560×1080 and 720×720. Screenshot-based visual review and a full normal-speed campaign balance playtest remain outstanding. No campaign-duration, universal frame-rate, audio loudness or production-quality claim is made. Changes are local until explicitly published.

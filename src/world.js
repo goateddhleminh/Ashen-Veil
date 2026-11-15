@@ -24,6 +24,7 @@ export class World {
     this.scene = scene; this.hash = new SpatialHash();
     this.materials = new Map(); this.box = new THREE.BoxGeometry(1, 1, 1);
     this.cone = new THREE.ConeGeometry(1, 1, 5);
+    const originalChildren=new Set(scene.children);
     let seed = 713;
     const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
     this.mesh(this.box, 0x303c38, 0, -.3, 0, 54, .5, 54);
@@ -74,6 +75,49 @@ export class World {
     moon.castShadow = true; moon.shadow.mapSize.set(2048, 2048);
     Object.assign(moon.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, far: 80 });
     moon.shadow.bias = -.0006; moon.shadow.normalBias = .04; scene.add(moon);
+    this.buildRegions(originalChildren);
+  }
+  buildRegions(originalChildren) {
+    const scene=this.scene;
+    this.regionGroups={};this.regionHashes={graveyard:this.hash};
+    const graveyard=new THREE.Group();
+    for(const child of [...scene.children])if(!originalChildren.has(child)&&!child.isLight)graveyard.add(child);
+    scene.add(graveyard);this.regionGroups.graveyard=graveyard;
+    for(const id of ['refuge','marsh','citadel']){
+      const group=new THREE.Group();this.regionGroups[id]=group;scene.add(group);
+      const hash=new SpatialHash();this.regionHashes[id]=hash;
+      const add=(geo,color,x,y,z,sx,sy,sz,solid=0)=>{const mesh=this.mesh(geo,color,x,y,z,sx,sy,sz);group.add(mesh);if(solid)hash.add({x,z,radius:solid});return mesh;};
+      add(this.box,id==='marsh'?0x483d29:id==='citadel'?0x302d40:0x3d493e,0,-.3,0,54,.5,54);
+      for(let z=-22;z<=22;z+=2)add(this.box,id==='citadel'?0x605d72:0x665e4d,0,0,z,3,.12,1.8);
+      if(id==='refuge'){
+        for(const x of [-12,12])for(const z of [-14,0,14]){
+          add(this.box,0x66543d,x,1.5,z,5,3,4,3);
+          add(this.cone,0x7c4736,x,4,z,6,2.5,5);
+          add(this.box,0xd7a455,x,1.6,z+2.05,1,.8,.08);
+        }
+        for(const x of [-5,5]){add(this.box,0x8d7651,x,.7,4,2,1.4,1,1);add(this.box,0xb19e73,x,1.6,4,2.4,.25,1.4);}
+      }else if(id==='marsh'){
+        for(let i=0;i<28;i++){
+          const x=(i%2?1:-1)*(6+(i*7%16)),z=(i*11%44)-22;
+          add(this.cone,0x32281f,x,1.3,z,.65,2.6,.65,.5);
+          add(this.box,0x78623a,x,.04,z+1,3,.08,2);
+          const reed=add(this.box,0xba863b,x+.7,.6,z,.12,1.2,.12);reed.rotation.z=.25;
+        }
+      }else{
+        for(const x of [-8,8,-18,18])for(const z of [-18,-9,0,9,18]){
+          add(this.box,0x5b566b,x,1.8,z,1.5,3.6,1.5,1);
+          add(this.box,0x898095,x,3.7,z,2.1,.4,2.1);
+          add(this.box,0x443d58,x,.2,z,2.3,.4,2.3);
+        }
+        for(const z of [-18,18])add(this.box,0x71677c,0,5,z,17,.7,1.3);
+      }
+    }
+    this.setRegion('graveyard');
+  }
+  setRegion(id) {
+    if(!this.regionGroups[id])return;
+    for(const [key,group] of Object.entries(this.regionGroups))group.visible=key===id;
+    this.hash=this.regionHashes[id];
   }
   mat(color, glow = false) {
     const key = `${color}-${glow}`;

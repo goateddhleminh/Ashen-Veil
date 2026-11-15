@@ -52,8 +52,12 @@ export class Loot {
     if (drop.kind === 'gear') {
       if (hero.inventory.length >= 24) { this.onNotice('Inventory full · equip an item or leave this drop'); this.selected = null; return; }
       hero.inventory.push(drop.item);
-    } else if (drop.kind === 'potion') hero.potions += drop.amount;
+    } else if (drop.kind === 'potion') {
+      if(hero.potions+drop.amount>9999){this.onNotice('Potion storage full · leave this drop until you have room.');this.selected=null;return;}
+      hero.potions += drop.amount;
+    }
     else hero.currencies[drop.kind] += drop.amount;
+    this.onCollect?.();
     this.onNotice(`Collected ${drop.label.textContent}`); this.remove(drop);
   }
   render(camera, playing) {

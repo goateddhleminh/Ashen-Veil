@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { face } from './entities.js';
-import { xpForLevel } from './data.js';
+import { xpForLevel, LEVEL_CAP } from './data.js';
 import { recomputeStats } from './progression.js';
+import { skillHits } from './skill-shapes.js';
+import { advanceBursts } from './skill-bursts.js';
 
 export class Combat {
   constructor(scene, onKill, onLevel) {
-    this.onKill = onKill; this.onLevel = onLevel; this.cursor = 0;
+    this.onKill = onKill; this.onLevel = onLevel; this.cursor = 0; this.bursts=[];
     const geometry = new THREE.RingGeometry(.65, .85, 24, 1, 0, Math.PI * 1.4);
     // Reuse a bounded effect pool; no geometry allocation on hit or level-up.
     this.effects = Array.from({ length: 20 }, () => {
@@ -20,10 +22,29 @@ export class Combat {
     e.mesh.position.copy(position); e.mesh.position.y = .15;
     e.mesh.material.color.setHex(color); e.mesh.visible = true;
   }
+  applySkill(hero, skill, point) {
+    if(skill.id==='barrage'){
+      if(this.bursts.length<4)this.bursts.push({hero,skill:{...skill,id:'barrage-pulse',multiplier:skill.multiplier/3},point:{...point},remaining:3,until:0,interval:.18});
+      return;
+    }
+    this.effect(point, skill.color, skill.radius, .65);
+    if(skill.id==='volley')for(let i=1;i<=5;i++)this.effect({x:hero.position.x+(point.x-hero.position.x)*i/5,y:0,z:hero.position.z+(point.z-hero.position.z)*i/5},skill.color,skill.radius*.5,.35);
+    hero.attackVisual = .28;
+    for (const enemy of this.enemies || []) {
+      if (!enemy.active || !skillHits(skill.id,hero.position,point,enemy.position,skill.radius)) continue;
+      this.damage(enemy, hero.damage * skill.multiplier * (hero.legendaryEffects?.includes('echo')?1.25:1));
+      if(skill.effect==='slow') enemy.slowTime=4;
+      if(skill.effect==='stun') { enemy.stunTime=1.2; enemy.windup=0; }
+    }
+  }
   damage(target, amount) {
-    if (!target.alive) return;
+    if (!target.alive || target.invulnerable > 0) return;
+    if(target.legendaryEffects?.includes('bastion')) amount*=.85;
+    if(target.guardTime>0) amount*=.5;
+    if(target.wardTime>0) amount*=.3;
     const mitigated = amount * 100 / (100 + (target.armor || 0));
     target.hp = Math.max(0, target.hp - mitigated); target.flash = .12;
+    this.onSound?.(target.enemy?'hit':'hurt');
     this.effect(target.position, target.enemy ? 0xe9ba70 : 0xd24935, .7);
     if (!target.hp) {
       target.alive = false;
@@ -31,6 +52,9 @@ export class Combat {
     }
   }
   update(hero, enemies, dt) {
+    this.enemies = enemies;
+    if(hero.alive)advanceBursts(this.bursts,dt,b=>this.applySkill(b.hero,b.skill,b.point));
+    else this.bursts.length=0;
     hero.cooldown = Math.max(0, hero.cooldown - dt);
     if (hero.alive && hero.cooldown <= 0) {
       let nearest = null, distance = hero.range;
@@ -41,6 +65,7 @@ export class Combat {
       }
       if (nearest) {
         face(hero, nearest.position); hero.cooldown = hero.attackSeconds; hero.attackVisual = .28;
+        if(hero.legendaryEffects?.includes('frost')) nearest.slowTime=2;
         let hits = 1;
         const amount = hero.damage * (Math.random() * 100 < hero.crit ? 1.75 : 1);
         if (hero.classId === 'warrior') {
@@ -72,13 +97,16 @@ export class Combat {
   }
   grantXP(hero, xp) {
     hero.xp += xp;
-    while (hero.xp >= hero.xpNeeded) {
+    while (hero.level < LEVEL_CAP && hero.xp >= hero.xpNeeded) {
       hero.xp -= hero.xpNeeded; hero.level++; hero.xpNeeded = xpForLevel(hero.level);
+      hero.talentPoints = (hero.talentPoints || 0) + 1;
+      hero.statPoints = (hero.statPoints || 0) + 2;
       hero.baseStats.vitality += 2;
       hero.baseStats[hero.classId === 'mage' ? 'intelligence' : hero.classId === 'archer' ? 'dexterity' : 'strength'] += 2;
       recomputeStats(hero); hero.hp = hero.maxHp;
       this.effect(hero.position, 0xffd57c, 3.5, 1); this.onLevel(hero.level);
     }
+    if(hero.level >= LEVEL_CAP)hero.xp=0;
   }
-  reset() { this.effects.forEach(e => { e.life = 0; e.mesh.visible = false; }); }
+  reset() { this.bursts.length=0; this.effects.forEach(e => { e.life = 0; e.mesh.visible = false; }); }
 }

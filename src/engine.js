@@ -21,6 +21,14 @@ export class Engine {
       render(dt);
     });
   }
+  setQuality(quality) {
+    this.renderer.setPixelRatio(quality==='low'?1:Math.min(devicePixelRatio,1.5));
+    const enabled=quality!=='low';
+    if(this.renderer.shadowMap.enabled!==enabled){
+      this.renderer.shadowMap.enabled=enabled;
+      this.scene.traverse(object=>{if(object.material)(Array.isArray(object.material)?object.material:[object.material]).forEach(material=>material.needsUpdate=true);});
+    }
+  }
   dispose() {
     this.renderer.setAnimationLoop(null);
     const geometries = new Set(), materials = new Set();
