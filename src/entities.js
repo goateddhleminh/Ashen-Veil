@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WARRIOR, UNDEAD, xpForLevel } from './data.js';
+import { initializeProgression } from './progression.js';
 
 // Model parts share geometry and materials; actors contain only mutable gameplay state.
 const box = new THREE.BoxGeometry(1, 1, 1);
@@ -36,7 +37,10 @@ export function createActor(scene, enemy = false) {
   const arm = new THREE.Group(); arm.position.set(-.47, 1.1, 0); body.add(arm);
   part(arm, box, armor, 0, -.22, 0, .18, .48, .2);
   part(arm, box, 0x635241, 0, -.43, .2, .12, .12, .4);
-  part(arm, box, enemy ? 0x878c7b : 0xc9dce1, 0, -.38, .65, .15, .08, .8);
+  const weapon = part(arm, box, enemy ? 0x878c7b : 0xc9dce1, 0, -.38, .65, .15, .08, .8);
+  const crystal = part(arm, head, 0x8c83ed, 0, -.38, 1.15, .55, .55, .55); crystal.visible = false;
+  const bow = new THREE.Group(); arm.add(bow); bow.visible = false;
+  for (const side of [-1, 1]) { const limb = part(bow, box, 0xc09e63, 0, -.38 + side * .35, .7, .08, .55, .09); limb.rotation.x = side * -.45; }
   if (!enemy) part(body, box, 0x705c3e, .48, .85, .18, .12, .64, .49);
   // World-space bars billboard in the render pass.
   const bar = new THREE.Group(); bar.position.y = 2.05; model.add(bar);
@@ -44,7 +48,7 @@ export function createActor(scene, enemy = false) {
   const fill = new THREE.Mesh(box, material(enemy ? 0xb95042 : 0xc6ac72)); fill.scale.set(.9, .055, .05); fill.position.z = .03; bar.add(fill);
   bar.visible = enemy;
   scene.add(model);
-  return { ...data, maxHp: data.hp, enemy, position: new THREE.Vector3(), target: new THREE.Vector3(), model, body, legs, arm, bar, fill,
+  return { ...data, maxHp: data.hp, enemy, position: new THREE.Vector3(), target: new THREE.Vector3(), model, body, legs, arm, bar, fill, weapon, crystal, bow,
     level: 1, xp: 0, xpNeeded: xpForLevel(1), cooldown: 0, windup: 0, attackVisual: 0, flash: 0, stride: 0, moving: false, alive: true, active: true };
 }
 export function animateActor(actor, dt, camera) {
@@ -66,7 +70,10 @@ export function face(actor, target) {
   actor.model.rotation.y = Math.atan2(target.x - actor.position.x, target.z - actor.position.z);
   // The health bar cancels its parent's yaw before applying camera orientation.
 }
-export function resetHero(hero) {
-  Object.assign(hero, WARRIOR, { maxHp: WARRIOR.hp, level: 1, xp: 0, xpNeeded: xpForLevel(1), cooldown: 0, windup: 0, alive: true, active: true });
+export function resetHero(hero, classId = 'warrior') {
+  Object.assign(hero, WARRIOR, { maxHp: WARRIOR.hp, level: 1, xp: 0, xpNeeded: xpForLevel(1), cooldown: 0, windup: 0, flash: 0, attackVisual: 0, alive: true, active: true });
+  initializeProgression(hero, classId);
+  hero.weapon.visible = hero.classId !== 'archer'; hero.bow.visible = hero.classId === 'archer'; hero.crystal.visible = hero.classId === 'mage';
+  hero.weapon.scale.set(hero.classId === 'mage' ? .09 : .15, .08, hero.classId === 'mage' ? 1.2 : .8);
   hero.position.set(0, 0, 4); hero.target.copy(hero.position);
 }

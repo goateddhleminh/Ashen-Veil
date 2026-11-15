@@ -40,7 +40,10 @@
       <div class="xp-label"><span>Experience</span><span id="xp-text">0 / 100</span></div>
       <div id="xp-meter" class="xp-track" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-fill"></div></div>
     </section>
-    <span class="chapter-mark" aria-hidden="true">I <span>—</span> INTO THE VEIL</span>
+    <nav class="hero-controls" aria-label="Hero controls">
+      <div class="currencies" aria-label="Currencies"><span>Gold <b id="gold">0</b></span><span>Gems <b id="gems">0</b></span><span>Diamonds <b id="diamonds">0</b></span></div>
+      <div class="hero-buttons"><button id="character-button" type="button">Character <kbd>C</kbd></button><button id="inventory-button" type="button">Inventory <kbd>I</kbd></button><button id="potion-button" type="button">Potion <b id="potions">0</b> <kbd>Q</kbd></button></div>
+    </nav>
   </div>
   <div id="modal" class="modal-backdrop">
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
@@ -49,8 +52,18 @@
       <h2 id="modal-title">ASHEN <span>VEIL</span></h2>
       <div class="ornament" aria-hidden="true"><span>◆</span></div>
       <p id="modal-description">Beyond the iron gates, the graveyard stirs.<br>The nameless dead rise beneath an ashen sky.<br>Carry your steel into the dark. Let them rest.</p>
+      <fieldset id="class-selection" class="class-selection"><legend>Choose your calling</legend><div id="class-options" class="class-options"></div></fieldset>
       <button id="modal-action" class="primary-button" type="button">Enter the graveyard <span aria-hidden="true">↗</span></button>
       <p id="modal-hint" class="modal-hint">Click to move. Your blade knows the rest.</p>
+    </section>
+  </div>
+  <div id="inventory-overlay" class="modal-backdrop" hidden>
+    <section class="inventory-card" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
+      <header class="panel-header"><div><p class="eyebrow">A moment beyond the fray</p><h2 id="panel-title">The Wanderer</h2></div><button id="panel-close" type="button" aria-label="Close character and inventory">Close <kbd>Esc</kbd></button></header>
+      <div class="panel-tabs" role="tablist" aria-label="Hero panels"><button id="character-tab" role="tab" aria-selected="true" aria-controls="character-panel" type="button">Character</button><button id="inventory-tab" role="tab" aria-selected="false" aria-controls="inventory-panel" tabindex="-1" type="button">Inventory <span id="inventory-count">0 / 24</span></button></div>
+      <section id="character-panel" class="panel-content" role="tabpanel" aria-labelledby="character-tab"><h3>Attributes & combat</h3><dl id="hero-stats" class="stat-grid"></dl><h3>Equipped</h3><div id="equipment-list" class="equipment-list"></div></section>
+      <section id="inventory-panel" class="panel-content" role="tabpanel" aria-labelledby="inventory-tab" hidden><p class="panel-help">Compare each item's modifiers with your equipped piece. Equipping replaces the item in that slot.</p><div id="inventory-list" class="inventory-list"></div></section>
+      <p class="panel-footer">The graveyard waits while this panel is open.</p>
     </section>
   </div>
   <!-- main.js owns boot success/error text and hides this once the scene is ready. -->

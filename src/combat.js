@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { face } from './entities.js';
 import { xpForLevel } from './data.js';
+import { recomputeStats } from './progression.js';
 
 export class Combat {
   constructor(scene, onKill, onLevel) {
@@ -21,7 +22,8 @@ export class Combat {
   }
   damage(target, amount) {
     if (!target.alive) return;
-    target.hp = Math.max(0, target.hp - amount); target.flash = .12;
+    const mitigated = amount * 100 / (100 + (target.armor || 0));
+    target.hp = Math.max(0, target.hp - mitigated); target.flash = .12;
     this.effect(target.position, target.enemy ? 0xe9ba70 : 0xd24935, .7);
     if (!target.hp) {
       target.alive = false;
@@ -39,7 +41,25 @@ export class Combat {
       }
       if (nearest) {
         face(hero, nearest.position); hero.cooldown = hero.attackSeconds; hero.attackVisual = .28;
-        this.effect(hero.position, 0xe9d1a0, 1.8); this.damage(nearest, hero.damage);
+        let hits = 1;
+        const amount = hero.damage * (Math.random() * 100 < hero.crit ? 1.75 : 1);
+        if (hero.classId === 'warrior') {
+          this.effect(hero.position, 0xe9d1a0, 1.8);
+          // Sweeping blade catches a second nearby undead for half damage.
+          const secondary = enemies.find(e => e !== nearest && e.active && hero.position.distanceTo(e.position) < hero.range);
+          this.damage(nearest, amount); if (secondary) { this.damage(secondary, amount * .5); hits++; }
+        } else {
+          const color = hero.classId === 'mage' ? 0xa49aff : 0x92d9ad;
+          // Bounded rings trace the instantaneous bolt/arrow from weapon to target.
+          const impact = nearest.position.clone();
+          for (let i = 1; i <= 5; i++) this.effect(hero.position.clone().lerp(impact, i / 5), color, hero.classId === 'mage' ? .45 : .16, .22);
+          this.damage(nearest, amount);
+          if (hero.classId === 'mage') {
+            this.effect(impact, color, 1.7, .4);
+            for (const e of enemies) if (e !== nearest && e.active && e.position.distanceTo(impact) < 1.8) { this.damage(e, amount * .4); hits++; }
+          }
+        }
+        hero.hp = Math.min(hero.maxHp, hero.hp + (hero.lifeOnHit || 0) * hits);
       }
     }
     for (const e of this.effects) {
@@ -54,7 +74,9 @@ export class Combat {
     hero.xp += xp;
     while (hero.xp >= hero.xpNeeded) {
       hero.xp -= hero.xpNeeded; hero.level++; hero.xpNeeded = xpForLevel(hero.level);
-      hero.maxHp += 18; hero.hp = hero.maxHp; hero.damage += 4;
+      hero.baseStats.vitality += 2;
+      hero.baseStats[hero.classId === 'mage' ? 'intelligence' : hero.classId === 'archer' ? 'dexterity' : 'strength'] += 2;
+      recomputeStats(hero); hero.hp = hero.maxHp;
       this.effect(hero.position, 0xffd57c, 3.5, 1); this.onLevel(hero.level);
     }
   }
