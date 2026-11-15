@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0d">
+  <link rel="icon" href="data:,">
+  <title>Ashen Veil — The Forgotten Graveyard</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+  </script>
+</head>
+<body data-state="ready">
+  <canvas id="game" aria-label="Ashen Veil graveyard battlefield" tabindex="0"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <!-- HUD is transparent to world input; only real controls receive pointer events. -->
+  <div id="hud">
+    <header class="zone">
+      <span class="eyebrow">ASHEN VEIL <span class="zone-separator">/</span> ACT I</span>
+      <h1>The Forgotten Graveyard</h1>
+      <p><span class="tiny-diamond" aria-hidden="true"></span> The dead do not rest here.</p>
+    </header>
+    <div class="encounter">
+      <div class="counter"><span class="eyebrow">Slain</span><strong id="kills">0</strong></div>
+      <div class="counter"><span class="eyebrow">Remaining</span><strong id="enemy-count">0</strong></div>
+      <button id="pause-button" class="pause-button" type="button" aria-label="Pause game" title="Pause game" disabled><span aria-hidden="true">Ⅱ</span></button>
+    </div>
+    <div id="announcement" class="announcement" role="status" aria-live="polite"></div>
+    <section class="vitality" aria-label="Hero health">
+      <div id="health-globe" class="health-globe" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+        <div class="health-liquid"></div><div class="globe-shine"></div>
+        <div class="health-number"><strong id="health-current">100</strong><span id="health-max">/ 100</span></div>
+      </div>
+      <div class="vitality-copy"><span class="eyebrow">Vitality</span><span class="hero-name">The Wanderer</span><span class="hero-level">Level <b id="level">1</b></span></div>
+    </section>
+    <section class="combat-hud" aria-label="Combat and experience">
+      <div class="combat-mode"><span class="blade-icon" aria-hidden="true">†</span><div><span class="eyebrow">Steel answers the darkness</span><strong>Auto attack <span class="status-dot" aria-hidden="true"></span></strong></div></div>
+      <p class="move-instruction"><span class="mouse-icon" aria-hidden="true"></span> Click or hold to move <span class="instruction-divider">·</span> Strike nearby foes automatically</p>
+      <div class="xp-label"><span>Experience</span><span id="xp-text">0 / 100</span></div>
+      <div id="xp-meter" class="xp-track" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-fill"></div></div>
+    </section>
+    <span class="chapter-mark" aria-hidden="true">I <span>—</span> INTO THE VEIL</span>
+  </div>
+  <div id="modal" class="modal-backdrop">
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
+      <div class="sigil" aria-hidden="true"><span>†</span></div>
+      <p id="modal-eyebrow" class="eyebrow">A light where none remains</p>
+      <h2 id="modal-title">ASHEN <span>VEIL</span></h2>
+      <div class="ornament" aria-hidden="true"><span>◆</span></div>
+      <p id="modal-description">Beyond the iron gates, the graveyard stirs.<br>The nameless dead rise beneath an ashen sky.<br>Carry your steel into the dark. Let them rest.</p>
+      <button id="modal-action" class="primary-button" type="button">Enter the graveyard <span aria-hidden="true">↗</span></button>
+      <p id="modal-hint" class="modal-hint">Click to move. Your blade knows the rest.</p>
+    </section>
+  </div>
+  <!-- main.js owns boot success/error text and hides this once the scene is ready. -->
+  <div id="loading" role="status" aria-live="polite">Lighting the last embers…</div>
+  <noscript><div class="noscript">Ashen Veil requires JavaScript to enter the graveyard.</div></noscript>
+  <script type="module">
+    // Dynamic import also catches CDN/network failures before the engine can start.
+    import('./src/main.js').catch(error => {
+      const status = document.getElementById('loading');
+      status.hidden = false;
+      status.textContent = `Unable to load the game: ${error.message}. Check your connection and serve this folder over HTTP(S).`;
+    });
+  </script>
+</body>
+</html>
