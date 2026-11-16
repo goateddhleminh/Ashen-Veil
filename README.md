@@ -28,31 +28,47 @@ Return to Ember Refuge to restore life and resource and use the merchant, forge 
 | Q | Healing potion: restores 45% maximum life; four-second cooldown; no consumption at full health |
 | C | Character, travel, quests, talents and equipment |
 | I | Inventory, filtering, merchant, forge and stash |
+| J | Events, reward claims, Tower controls, supplies and appearance |
 | Escape | Close a panel or pause/resume |
 
 Manual is the default: movement, basic attacks and loot collection require your input. Automation seeks enemies, attacks in range, casts ready abilities when resources and targets allow, and walks to collectible ground drops. It attempts to evade enemy and boss attack warnings; dodge cooldowns, obstacles and overlapping attacks can still leave it vulnerable. When an ultimate is ready and a target is in reach, Automation reserves enough resource to cast it before resuming other abilities. Skills and potions remain available on their keys. XP is awarded for kills in both modes; it is not a ground pickup. Switch modes at any time during play using the HUD control.
 
 Travel and expedition entry take three seconds. During the countdown the character stays idle, movement and combat are locked, and additional travel requests are ignored. Arrival clears held input. Starting or recovering a character at Ember Refuge is immediate.
 
-Panels pause combat, regeneration, buffs, cooldowns and consumable use. Switching tabs/windows pauses the game. Settings on the title/pause menu control volume, mute, shadows/resolution and reduced motion. Reduced motion removes body bobbing and decorative CSS animation while preserving combat cues.
+Panels pause combat, regeneration, buffs and cooldowns; event supplies have explicit Use buttons in the Events panel. Switching tabs/windows normally pauses the game. **Run while hidden** is an opt-in for the current session and requires Automation mode; manual pause and open panels still pause simulation. Browsers may throttle or suspend hidden pages, so this is not guaranteed uninterrupted background play and provides no offline catch-up after closing the page. Hidden pages remain silent. Settings on the title/pause menu control volume, mute, shadows/resolution, reduced motion, auto-equip and auto-salvage. Reduced motion removes body bobbing and decorative CSS animation while preserving combat cues.
 
 ## Builds and loot
 
 - Three classes with distinct basic attacks and four abilities each; resource regenerates during play. Warrior Cataclysm, Mage Starfall and Archer Arrowstorm are high-cost ultimates. Archer volley pierces a corridor, while barrage lands three timed area pulses.
 - Nine talent nodes per class, including three skill modifiers, with three ranks each; level-ups award one talent point and two attribute points. Level cap: **30**. Excess XP at the cap is discarded.
 - Six equipment slots: weapon, armor, helm, gloves, boots and ring. Four rarities, ten attribute/affix types (including attack speed and cooldown reduction) and six legendary properties. Bonus affixes are unique per item and roll within ±15%.
-- Inventory holds 24 items; each class has a 48-item stash. Favoriting protects items from sale and salvage. Equip comparisons, sorting and filtering help manage gear.
+- Inventory starts at 24 items and expands at the refuge merchant in four-slot purchases up to **500**. The first expansion costs 100 gold, then 200, 300 and so on. Each class has a separate 48-item stash. Favoriting protects items from sale and salvage. Equip comparisons, sorting and filtering help manage gear.
 - Sell gear for gold, salvage it for gems, purchase potions or magic equipment, and upgrade items up to five times using gold, gems and later diamonds. Refund talent ranks at the refuge for gold.
 - Armor reduces damage by `100 / (100 + armor)`; combined mitigation is capped at 80%. Equipment changes never heal. Legendary properties affect basic-hit healing, skill damage, slowing, damage reduction, resource regeneration or attack speed.
 - Graveyard Ember shrines grant 30 seconds of doubled resource regeneration; Marsh Renewal shrines heal 50% maximum life; Citadel Ward shrines grant ten seconds of protection. Each activates once per visit.
 - Choose Normal, Nightmare or Hell at the refuge. Campaign encounters are capped to Normal levels 1–12, Nightmare 13–22 and Hell 23–30; higher tiers increase health and damage. Expedition scaling remains independent of these caps. Stage progress resets on travel.
-- Auto-salvage settings convert selected low-rarity pickups directly into gems; favorites remain protected. Bulk salvage and affix rerolls are available at the refuge.
+- Auto-salvage converts eligible pickups directly into gems. The threshold option includes lower rarities; selecting an exact Common, Magic or Rare option overrides that threshold and salvages only that rarity. Favorites and Legendary gear remain protected from automatic and bulk salvage. Bulk salvage and affix rerolls are available at the refuge.
+- Auto-equip is enabled by default in settings and runs only during Automation. It compares compatible inventory equipment using a stat score; it is a convenience heuristic, not a guarantee of the best build.
 
 Expeditions unlock after the campaign. Defeat 20 enemies and a guardian, then claim the completion reward before leaving. Clear a tier to unlock the next (up to 100). Six modifier types rotate in pairs; three bounty types offer additional claimable currency rewards. Equipment drops scale with character level plus expedition tier, capped at item level 100; enemy XP scales with reward level. Highest cleared tier persists; the active encounter does not.
+
+## Events
+
+Press **J** to open five events. **E** remains the nearby world interaction key for chests, shrines and stage portals; event rewards are claimed in the panel. Reward choices must be selected before claiming, and gear rewards remain unclaimed if the pack has insufficient space.
+
+- **First Steps:** nine introductory missions, followed by the Rookie title and a choice of rare class weapon after claiming all nine rewards.
+- **Rookie 7-Day Trial:** days unlock by elapsed calendar time from character creation; missed unlocked rewards remain available. Objectives include room clears, gear, levels, elites, chests and a guardian. Day seven also requires a visit and mission completion; its reward includes the Veteran cape.
+- **Zone Conquest:** uses the existing Forgotten Graveyard (`graveyard`), Cinder Marsh (`marsh`) and Hollow Citadel (`citadel`) regions, not additional maps. Medal requirements combine 80% of encounter enemies, three elite packs, a hidden chest and the guardian. Normal, Nightmare and Hell award Bronze, Silver and Gold respectively; each zone's Gold cape has its own color (Graveyard jade, Marsh copper, Citadel violet), and all three Gold medals unlock five Legendary armor/accessory pieces. The Conqueror cape retains its gold color.
+- **Infernal Tower:** enter and advance cleared floors from Events. Every fifth floor records a checkpoint, a run permits five healing potions, and milestone rewards include the Infernal weapon skin at floor 50. Weekly best floor/time records are local to the save, not an online leaderboard. Continue returns to the refuge and ends an interrupted run rather than resuming its arena.
+- **Blood Moon:** every 30 minutes of simulated play offers a 35% chance of a five-minute event. Outside the Tower, affected combat regions have stronger enemies, doubled gold and improved rare drops. Collect 100 kill fragments during the event to bring in the Reaper; its reward includes the Blood Moon cape. This timer does not award offline progress.
+
+The Events supplies wallet displays dust, shards and Ruby/Sapphire/Emerald counts. Mana potions restore class resource, portal scrolls return to the refuge, and reset tokens refund allocated talent ranks. Dust, shards and colored gems are stored rewards; the wallet does not provide a socketing or crafting system. Unlocked titles, capes, the Graveyard crown and the Infernal weapon skin can be selected in the same panel. Cape, crown and weapon selections change the hero's visible meshes; new characters restore default appearance.
 
 ## Saving
 
 Characters save separately by class in browser local storage. Autosave runs during play and after important transactions, quests and death. Continue returns to the refuge. New Game asks before replacing an existing class save. Export a JSON backup from the title screen before clearing browser data or moving to another device/host. Import detects and validates the saved class and asks before replacing its save; it does not merge items or rewards.
+
+Save format **v2** preserves expanded inventory capacity, event progress and claims, event supplies, cosmetic unlocks and selected appearance. Valid v1 saves migrate with the original 24-slot pack capacity; older saves without events receive initial event state.
 
 Saves belong to the browser profile and website origin. Private browsing or blocked/full storage can prevent persistence; errors are displayed in-game. A previous valid save is retained as a fallback. Settings use a separate key. Ground loot, temporary buffs and unfinished expedition progress are not saved.
 

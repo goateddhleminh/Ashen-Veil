@@ -1,4 +1,4 @@
-import { createItem } from './progression.js';
+import { createItem, inventoryCapacity, inventoryExpansionCost, INVENTORY_MAX_CAPACITY } from './progression.js';
 const result=(ok,message)=>({ok,message});
 const find=(hero,id)=>hero.inventory.findIndex(item=>item.id===id);
 export const saleValue=item=>Math.max(1,item.level*({common:8,magic:15,rare:30,legendary:65}[item.rarity]??8));
@@ -12,6 +12,17 @@ export const salvageValue=item=>({common:1,magic:2,rare:4,legendary:8}[item.rari
 export function shouldAutoSalvage(item,threshold='none') {
  const rank={common:0,magic:1,rare:2};
  return Boolean(item&&!item.favorite&&Object.hasOwn(rank,item.rarity)&&Object.hasOwn(rank,threshold)&&rank[item.rarity]<=rank[threshold]);
+}
+export function shouldAutoSalvageExact(item,rarity='none') {
+  return Boolean(item&&!item.favorite&&rarity !== 'none'&&rarity !== 'legendary'&&item.rarity === rarity);
+}
+export function buyInventoryCapacity(hero) {
+  const capacity=inventoryCapacity(hero);
+  if(capacity>=INVENTORY_MAX_CAPACITY)return result(false,'Inventory capacity is already at maximum (500).');
+  const cost=inventoryExpansionCost(hero);
+  if((hero.currencies?.gold??0)<cost)return result(false,`Requires ${cost} gold.`);
+  hero.currencies.gold-=cost; hero.inventoryCapacity=Math.min(INVENTORY_MAX_CAPACITY,capacity+4);
+  return result(true,`Inventory capacity expanded to ${hero.inventoryCapacity}.`);
 }
 // Bulk actions deliberately preserve legendary equipment as well as favorites.
 export function salvageUnfavorited(hero) {
@@ -35,7 +46,7 @@ export function stashItem(hero,id) {
 }
 export function retrieveItem(hero,id) {
  const i=(hero.stash??[]).findIndex(item=>item.id===id);
- if(i<0 || hero.inventory.length>=24) return result(false,'Item missing or inventory full (24).');
+ if(i<0 || hero.inventory.length>=inventoryCapacity(hero)) return result(false,'Item missing or inventory full (24).');
  hero.inventory.push(hero.stash.splice(i,1)[0]);return result(true,'Item retrieved.');
 }
 export function craftCost(item) {const rank=item.upgrades??0;return {gold:100*(rank+1)*item.level,gems:3*(rank+1),diamonds:rank>=2?1:0};}
@@ -70,7 +81,7 @@ export function buyItem(hero,shopId) {
  if(!['potion','weapon','armor','helm','gloves','boots','ring'].includes(shopId))return result(false,'Unknown merchant offer.');
  const cost=shopId==='potion'?35:120*hero.level;
  if(hero.currencies.gold<cost)return result(false,`Requires ${cost} gold.`);
- if(shopId!=='potion' && hero.inventory.length>=24)return result(false,'Inventory full (24).');
+ if(shopId!=='potion' && hero.inventory.length>=inventoryCapacity(hero))return result(false,'Inventory full (24).');
  if(shopId==='potion' && hero.potions>=9999)return result(false,'Potion capacity reached.');
  const item=shopId==='potion'?null:createItem(hero.classId,hero.level,'magic',shopId);
  hero.currencies.gold-=cost;

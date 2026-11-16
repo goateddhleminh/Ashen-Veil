@@ -8,7 +8,7 @@
  * recomputeStats(hero) returns hero; never heals or revives. Mutable hero required.
  * equipItem(hero,id), unequipItem(hero,slot), allocateStat(hero,key), usePotion(hero)
  * mutate the supplied hero on success and return readable UI messages.
- * Slots: weapon/armor; inventory capacity: 24; weapon class restrictions enforced.
+ * Slots: weapon/armor; inventory capacity starts at 24 and can expand to 500; weapon class restrictions enforced.
  * crit is percent (0..100); lifeOnHit is flat healing for combat to apply per hit.
  * Potions heal exactly 45% maxHP, capped by missing HP; no consumption at full/dead.
  * Currency counters are collectible only. No spending/vendor API in this phase.
@@ -31,6 +31,10 @@ export const RARITIES = Object.freeze({
 });
 
 export const slots = ['weapon', 'armor', 'helm', 'gloves', 'boots', 'ring'];
+export const INVENTORY_BASE_CAPACITY = 24;
+export const INVENTORY_MAX_CAPACITY = 500;
+export const inventoryCapacity = hero => Math.min(INVENTORY_MAX_CAPACITY, Math.max(INVENTORY_BASE_CAPACITY, Math.floor(n(hero?.inventoryCapacity, INVENTORY_BASE_CAPACITY))));
+export const inventoryExpansionCost = hero => 100 * Math.max(1, Math.ceil((inventoryCapacity(hero) - INVENTORY_BASE_CAPACITY + 1) / 4));
 let nextItemId = 1;
 // A page-specific namespace keeps newly dropped items distinct from loaded gear.
 const itemNamespace = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -99,10 +103,24 @@ export function initializeProgression(hero, classId) {
   if (!hero || typeof hero !== 'object') return hero;
   hero.classId = validClass(classId); hero.baseStats = { ...CLASSES[hero.classId].stats };
   hero.equipment = { weapon: createItem(hero.classId, 1, 'common', 'weapon'), armor: createItem(hero.classId, 1, 'common', 'armor') };
-  hero.stash = []; hero.talents = {}; hero.talentPoints = 0;
+  hero.stash = []; hero.talents = {}; hero.talentPoints = 0; hero.inventoryCapacity = INVENTORY_BASE_CAPACITY;
   for(const slot of slots) hero.equipment[slot] ??= null;
   hero.inventory = []; hero.currencies = { gold: 0, gems: 0, diamonds: 0 }; hero.potions = 3; hero.potionCooldown = 0; hero.statPoints = 0;
   hero.hp = 1; recomputeStats(hero); hero.hp = hero.maxHp; hero.alive = true; return hero;
+}
+
+// Compare actual derived combat values, never rarity or item level alone.
+export function isEquipmentUpgrade(hero, item) {
+  if (!item || !slots.includes(item.slot) || (item.classId && item.classId !== hero.classId)) return false;
+  if (!hero.equipment?.[item.slot]) return true;
+  const score = equipment => {
+    const candidate = {...hero, equipment}; recomputeStats(candidate);
+    const dps = candidate.damage / candidate.attackSeconds * (1 + candidate.crit / 100);
+    const defense = candidate.maxHp * (1 + candidate.armor / 100);
+    const offense = dps * (1 + candidate.cooldownReduction / 100);
+    return item.slot === 'weapon' ? offense : defense * offense;
+  };
+  return score({...hero.equipment,[item.slot]:item}) > score(hero.equipment) + 1e-9;
 }
 
 export function equipItem(hero, id) {
@@ -116,7 +134,7 @@ export function equipItem(hero, id) {
 
 export function unequipItem(hero, slot) {
   if (!hero?.equipment || !Array.isArray(hero.inventory) || !slots.includes(slot)) return 'Cannot unequip: invalid slot or inventory.';
-  if ((hero.inventory || []).length >= 24) return 'Inventory is full (24 items).';
+  if ((hero.inventory || []).length >= inventoryCapacity(hero)) return `Inventory is full (${inventoryCapacity(hero)} items).`;
   const item = hero.equipment[slot]; if (!item) return `No ${slot} equipped.`;
   hero.inventory ||= []; hero.inventory.push(item); hero.equipment[slot] = null; recomputeStats(hero); return `Unequipped ${item.name}.`;
 }

@@ -1,6 +1,18 @@
 import * as THREE from 'three';
 import { WARRIOR, UNDEAD, xpForLevel } from './data.js';
 import { initializeProgression } from './progression.js';
+import { applyHeroCosmetics } from './cosmetics.js';
+
+// Cosmetic materials are immutable, separate from the enemy palette.
+const cosmeticMaterials = Object.freeze({
+  veteran: new THREE.MeshStandardMaterial({ color: 0x305ca8, roughness: .65, flatShading: true }),
+  bloodMoon: new THREE.MeshStandardMaterial({ color: 0xb31b45, emissive: 0x38020a, roughness: .65, flatShading: true }),
+  graveyard: new THREE.MeshStandardMaterial({ color: 0x55bfa5, metalness: .25, roughness: .45, flatShading: true }),
+  marsh: new THREE.MeshStandardMaterial({ color: 0xe37c32, metalness: .25, roughness: .45, flatShading: true }),
+  citadel: new THREE.MeshStandardMaterial({ color: 0x9862d9, metalness: .25, roughness: .45, flatShading: true }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xe5b94e, metalness: .55, roughness: .35, flatShading: true }),
+  infernal: new THREE.MeshStandardMaterial({ color: 0xff6428, emissive: 0xee3108, emissiveIntensity: .8, metalness: .35, roughness: .4, flatShading: true })
+});
 
 // Model parts share geometry and materials; actors contain only mutable gameplay state.
 const box = new THREE.BoxGeometry(1, 1, 1);
@@ -44,10 +56,21 @@ export function createActor(scene, enemy = false) {
   const armor = enemy ? 0x667565 : 0x87939b, cloth = enemy ? 0x433f35 : 0x7e252a;
   part(body, box, armor, 0, .95, 0, .62, .65, .37);
   part(body, head, enemy ? 0xb9bba1 : 0xc1b49b, 0, 1.53, 0);
+  let cosmeticParts;
   if (!enemy) {
-    part(body, box, 0x606e79, 0, 1.68, 0, .49, .18, .43);
-    part(body, box, cloth, 0, 1.85, -.04, .1, .26, .3);
-    part(body, box, cloth, 0, .88, -.25, .63, .95, .08);
+    const helm = part(body, box, 0x606e79, 0, 1.68, 0, .49, .18, .43);
+    const plume = part(body, box, cloth, 0, 1.85, -.04, .1, .26, .3);
+    const cape = part(body, box, cloth, 0, .88, -.25, .63, .95, .08);
+    const crown = new THREE.Group(); body.add(crown); crown.visible = false;
+    // Five raised points share the existing unit box and one immutable material.
+    for (let i = 0; i < 5; i++) {
+      const point = new THREE.Mesh(box, cosmeticMaterials.gold);
+      point.position.set((i - 2) * .105, 1.86 + (i % 2 === 0 ? .025 : 0), .16);
+      point.scale.set(.065, i % 2 === 0 ? .25 : .18, .09);
+      point.castShadow = true; crown.add(point);
+    }
+    cosmeticParts = { cape, helm, plume, crown, materials: cosmeticMaterials,
+      defaults: { cape: cape.material, helm: helm.material } };
   }
   for (const side of [-1, 1]) {
     part(body, box, armor, side * .43, 1.18, 0, .28, .29, .44);
@@ -72,7 +95,11 @@ export function createActor(scene, enemy = false) {
   const fill = new THREE.Mesh(box, material(enemy ? 0xb95042 : 0xc6ac72)); fill.scale.set(.9, .055, .05); fill.position.z = .03; bar.add(fill);
   bar.visible = enemy;
   scene.add(model);
-  return { ...data, maxHp: data.hp, enemy, position: new THREE.Vector3(), target: new THREE.Vector3(), model, body, legs, arm, bar, fill, weapon, crystal, bow,
+  if (cosmeticParts) {
+    cosmeticParts.weapons = [weapon, crystal, ...bow.children];
+    cosmeticParts.defaults.weapons = cosmeticParts.weapons.map(mesh => mesh.material);
+  }
+  return { cosmeticParts, ...data, maxHp: data.hp, enemy, position: new THREE.Vector3(), target: new THREE.Vector3(), model, body, legs, arm, bar, fill, weapon, crystal, bow,
     level: 1, xp: 0, xpNeeded: xpForLevel(1), cooldown: 0, windup: 0, attackVisual: 0, flash: 0, stride: 0, moving: false, alive: true, active: true };
 }
 export function animateActor(actor, dt, camera) {
@@ -99,6 +126,8 @@ export function face(actor, target) {
 export function resetHero(hero, classId = 'warrior') {
   Object.assign(hero, WARRIOR, { maxHp: WARRIOR.hp, level: 1, xp: 0, xpNeeded: xpForLevel(1), cooldown: 0, windup: 0, flash: 0, attackVisual: 0, alive: true, active: true });
   initializeProgression(hero, classId);
+  hero.eventAppearance = {};
+  applyHeroCosmetics(hero);
   hero.weapon.visible = hero.classId !== 'archer'; hero.bow.visible = hero.classId === 'archer'; hero.crystal.visible = hero.classId === 'mage';
   hero.weapon.scale.set(hero.classId === 'mage' ? .09 : .15, .08, hero.classId === 'mage' ? 1.2 : .8);
   hero.position.set(0, 0, 4); hero.target.copy(hero.position);

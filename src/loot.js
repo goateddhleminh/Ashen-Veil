@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createItem, RARITIES } from './progression.js';
-import { shouldAutoSalvage, salvageValue } from './economy.js';
+import { shouldAutoSalvage, shouldAutoSalvageExact, salvageValue } from './economy.js';
+import { inventoryCapacity, isEquipmentUpgrade, recomputeStats } from './progression.js';
 
 const COLORS = { gold: '#e7bf61', gems: '#64cbbd', diamonds: '#b3d9ff', potion: '#ef7474' };
 export class Loot {
@@ -25,16 +26,17 @@ export class Loot {
     });
     this.projected = new THREE.Vector3();
   }
-  spawn(enemy, hero, dropLevel = hero.level) {
+  spawn(enemy, hero, dropLevel = hero.level, bonus = {}) {
     // One weighted drop per kill. Veteran enemies favor rarer equipment.
     const r = Math.random(), rank = enemy.rank || 0;
     let kind = r < .42 ? 'gold' : r < .54 ? 'gems' : r < .58 ? 'diamonds' : r < .72 ? 'potion' : 'gear';
     if (rank && r > .45) kind = 'gear';
     const drop = this.pool.find(d => !d.active);
-    if (!drop) { hero.currencies.gold += 5 + hero.level; this.onNotice('Ground loot full · excess drop converted to gold'); return; }
+    if (!drop) { const gold = Math.round((5 + hero.level) * (bonus.goldMultiplier ?? 1)); hero.currencies.gold += gold; this.onCollect?.({kind:'gold',amount:gold,converted:true}); this.onNotice('Ground loot full · excess drop converted to gold'); return; }
     drop.kind = kind; drop.amount = kind === 'gold' ? 6 + Math.floor(Math.random() * 9) + hero.level * 2 + rank * 8 : 1;
+    if (kind === 'gold') drop.amount = Math.round(drop.amount * (bonus.goldMultiplier ?? 1));
     const roll = Math.random();
-    const rarity = roll < .015 + rank * .035 ? 'legendary' : roll < .12 + rank * .14 ? 'rare' : roll < .42 + rank * .15 ? 'magic' : 'common';
+    const rarity = roll < .015 + rank * .035 + (bonus.rareBoost ?? 0) * .015 ? 'legendary' : roll < .12 + rank * .14 + (bonus.rareBoost ?? 0) ? 'rare' : roll < .42 + rank * .15 + (bonus.rareBoost ?? 0) * .12 ? 'magic' : 'common';
     drop.item = kind === 'gear' ? createItem(hero.classId, dropLevel, rarity) : null;
     const color = drop.item ? RARITIES[drop.item.rarity].color : COLORS[kind];
     drop.position.copy(enemy.position); drop.position.y = .35;
@@ -46,8 +48,9 @@ export class Loot {
 ${Object.entries(drop.item.mods).filter(([,v])=>v).map(([k,v])=>`+${v} ${k}`).join(' · ')}` : drop.label.textContent;
     drop.active = true; drop.mesh.visible = drop.beam.visible = true;
   }
+  canAutoEquip(hero, item) { return this.automation === true && this.settings.autoEquip !== false && isEquipmentUpgrade(hero, item); }
   canCollect(hero, drop) {
-    return drop.active && (drop.kind !== 'gear' || shouldAutoSalvage(drop.item,this.settings.autoSalvage) || hero.inventory.length < 24) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
+    return drop.active && (drop.kind !== 'gear' || this.canAutoEquip(hero, drop.item) || (this.settings.autoSalvageExact && this.settings.autoSalvageExact !== 'none' ? shouldAutoSalvageExact(drop.item,this.settings.autoSalvageExact) : shouldAutoSalvage(drop.item,this.settings.autoSalvage)) || hero.inventory.length < inventoryCapacity(hero)) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
   }
   update(hero, dt) {
     this.time += dt;
@@ -56,18 +59,32 @@ ${Object.entries(drop.item.mods).filter(([,v])=>v).map(([k,v])=>`+${v} ${k}`).jo
     hero.target.set(drop.position.x, 0, drop.position.z);
     if (hero.position.distanceTo(hero.target) > 1.6) return;
     if (drop.kind === 'gear') {
-      if (shouldAutoSalvage(drop.item,this.settings.autoSalvage)) {
-        const gems=salvageValue(drop.item);hero.currencies.gems+=gems;
-        this.onCollect?.();this.onNotice(`Auto-salvaged ${drop.item.name} (+${gems} gems)`);this.remove(drop);return;
+      if (this.canAutoEquip(hero, drop.item)) {
+        const item = drop.item, previous = hero.equipment[item.slot];
+        hero.equipment[item.slot] = item; recomputeStats(hero);
+        this.onEquip?.(item); this.onCollect?.({kind:'gear',item,amount:1,autoEquipped:true});
+        if (previous && hero.inventory.length >= inventoryCapacity(hero)) {
+          // Keep replaced equipment on the ground when the pack has no free slot.
+          drop.item = previous; drop.label.textContent = previous.name;
+          drop.label.title = `${previous.name} · Level ${previous.level} · ${previous.slot}`;
+          const color = RARITIES[previous.rarity].color;
+          drop.mesh.material.color.set(color); drop.beam.material.color.set(color); drop.label.style.color = color;
+          this.selected = null;
+        } else { if (previous) hero.inventory.push(previous); this.remove(drop); }
+        this.onNotice(`Auto-equipped ${item.name}`); return;
       }
-      if (hero.inventory.length >= 24) { this.onNotice('Inventory full · equip an item or leave this drop'); this.selected = null; return; }
+      if ((this.settings.autoSalvageExact && this.settings.autoSalvageExact !== 'none' ? shouldAutoSalvageExact(drop.item,this.settings.autoSalvageExact) : shouldAutoSalvage(drop.item,this.settings.autoSalvage))) {
+        const gems=salvageValue(drop.item);hero.currencies.gems+=gems;
+        this.onCollect?.({kind:'gear',item:drop.item,amount:gems,autoSalvaged:true});this.onNotice(`Auto-salvaged ${drop.item.name} (+${gems} gems)`);this.remove(drop);return;
+      }
+      if (hero.inventory.length >= inventoryCapacity(hero)) { this.onNotice('Inventory full · equip an item or leave this drop'); this.selected = null; return; }
       hero.inventory.push(drop.item);
     } else if (drop.kind === 'potion') {
       if(hero.potions+drop.amount>9999){this.onNotice('Potion storage full · leave this drop until you have room.');this.selected=null;return;}
       hero.potions += drop.amount;
     }
     else hero.currencies[drop.kind] += drop.amount;
-    this.onCollect?.();
+    this.onCollect?.({kind:drop.kind,item:drop.item,amount:drop.amount});
     this.onNotice(`Collected ${drop.label.textContent}`); this.remove(drop);
   }
   render(camera, playing) {

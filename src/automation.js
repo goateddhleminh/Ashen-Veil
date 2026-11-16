@@ -2,6 +2,18 @@ import { WORLD } from './data.js';
 import { SKILLS, castSkill, tryDodge } from './skills.js';
 import { attackHits } from './enemy-attacks.js';
 import { modifySkill } from './talents.js';
+import { equipItem, isEquipmentUpgrade } from './progression.js';
+
+export function autoEquipStrongest(hero) {
+  const equipped = [];
+  for (const item of [...(hero.inventory ?? [])]) {
+    if (!item || !item.slot) continue;
+    if (!isEquipmentUpgrade(hero, item)) continue;
+    const result = equipItem(hero, item.id);
+    if (typeof result === 'string' && result.startsWith('Equipped ')) equipped.push(item);
+  }
+  return equipped;
+}
 
 // Skill readiness stays authoritative in castSkill; movement/loot targets never set aim.
 export function castAutomationSkills(hero, enemies, combat) {

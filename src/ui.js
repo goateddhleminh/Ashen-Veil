@@ -1,4 +1,4 @@
-import { CLASSES, RARITIES, slots } from './progression.js';
+import { CLASSES, RARITIES, slots, inventoryCapacity, inventoryExpansionCost } from './progression.js';
 import { SKILLS } from './skills.js';
 import { TALENTS, talentCost } from './talents.js';
 import { saleValue, craftCost, rerollCost } from './economy.js';
@@ -17,8 +17,8 @@ const element = (tag, className, text) => {
 
 // Presentation only: simulation and pause ownership remain in main.js.
 export class UI {
-  constructor({ onStart, onRestart, onPause, onPanel, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy }) {
-    this.callbacks = { onStart, onRestart, onPause, onPanel, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy };
+  constructor({ onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy }) {
+    this.callbacks = { onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy };
     document.getElementById('continue-game').onclick = () => onContinue?.(this.selectedClass);
     document.getElementById('export-save').onclick = () => onExport?.(this.selectedClass);
     document.getElementById('import-save').onclick = () => document.getElementById('save-file').click();
@@ -34,11 +34,11 @@ export class UI {
     this.announcementTimer = null;
     this.nodes = Object.fromEntries([
       'hud', 'modal', 'modal-title', 'modal-eyebrow', 'modal-description', 'modal-action', 'modal-hint',
-      'pause-button', 'health-globe', 'health-current', 'health-max', 'level', 'kills', 'enemy-count',
+      'pause-button', 'background-toggle', 'health-globe', 'health-current', 'health-max', 'level', 'kills', 'enemy-count',
       'xp-text', 'xp-fill', 'xp-meter', 'announcement', 'class-selection', 'class-options',
       'character-button', 'inventory-button', 'potion-button', 'potions', 'gold', 'gems', 'diamonds',
       'inventory-overlay', 'panel-title', 'panel-close', 'character-tab', 'inventory-tab',
-      'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
+      'events-button', 'events-tab', 'events-panel', 'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
     ].map(id => [id, document.getElementById(id)]));
     for(const id of ['item-filter','item-sort']) document.getElementById(id).onchange=()=>{this.inventoryFingerprint='';this.renderPanel();};
     this.buildClasses();
@@ -49,25 +49,27 @@ export class UI {
       root.addEventListener('keydown', event => {
         // Main owns all game shortcuts, including panel dismissal.
         if (event.key === 'Tab' && ['ready', 'paused', 'dead', 'inventory'].includes(this.state)) this.trapFocus(event);
-        const gameplayKey=['Digit1','Digit2','Digit3','Space','KeyE'].includes(event.code);
+        const gameplayKey=['Digit1','Digit2','Digit3','Digit4','Space','KeyE'].includes(event.code);
         if(this.state==='playing'&&gameplayKey){event.preventDefault();return;}
-        if (!['escape', 'c', 'i', 'q'].includes(event.key.toLowerCase())) event.stopPropagation();
+        if (!['escape', 'c', 'i', 'j', 'q'].includes(event.key.toLowerCase())) event.stopPropagation();
       });
       root.addEventListener('keyup', event => event.stopPropagation());
     }
     this.nodes['pause-button'].addEventListener('click', () => this.callbacks.onPause?.());
+    this.nodes['background-toggle'].addEventListener('click', () => this.callbacks.onBackgroundToggle?.());
     this.nodes['modal-action'].addEventListener('click', () => {
       if (this.state === 'ready') this.callbacks.onStart?.(this.selectedClass);
       else if (this.state === 'dead') this.callbacks.onRestart?.(this.selectedClass);
       else if (this.state === 'paused') this.callbacks.onPause?.();
     });
-    for (const tab of ['character', 'inventory']) {
+    for (const tab of ['character', 'inventory', 'events']) {
       this.nodes[`${tab}-button`].addEventListener('click', () => { this.selectTab(tab); this.callbacks.onPanel?.(); });
       this.nodes[`${tab}-tab`].addEventListener('click', () => this.selectTab(tab));
       this.nodes[`${tab}-tab`].addEventListener('keydown', event => {
         if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
           event.preventDefault();
-          const next = event.key === 'Home' ? 'character' : event.key === 'End' ? 'inventory' : tab === 'character' ? 'inventory' : 'character';
+          const tabs=['character','inventory','events'];
+          const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[2] : tabs[(tabs.indexOf(tab)+(event.key==='ArrowRight'?1:2))%3];
           this.selectTab(next); this.nodes[`${next}-tab`].focus();
         }
       });
@@ -111,9 +113,9 @@ export class UI {
   }
 
   selectTab(tab) {
-    if (!['character', 'inventory'].includes(tab)) return;
+    if (!['character', 'inventory', 'events'].includes(tab)) return;
     this.activeTab = tab;
-    for (const id of ['character', 'inventory']) {
+    for (const id of ['character', 'inventory', 'events']) {
       this.nodes[`${id}-panel`].hidden = tab !== id;
       this.nodes[`${id}-tab`].setAttribute('aria-selected', String(tab === id));
       this.nodes[`${id}-tab`].tabIndex = tab === id ? 0 : -1;
@@ -154,12 +156,12 @@ export class UI {
 
   renderPanel() {
     const hero = this.hero; if (!hero) return;
-    const fingerprint = JSON.stringify([hero.classId, hero.level, hero.stats, hero.damage, hero.maxHp, hero.armor, hero.crit, hero.speed, hero.range, hero.attackSeconds, hero.equipment, hero.inventory, hero.stash, hero.talents, hero.talentPoints, hero.statPoints, hero.currencies]);
+    const fingerprint = JSON.stringify([hero.classId, hero.level, hero.stats, hero.damage, hero.maxHp, hero.armor, hero.crit, hero.speed, hero.range, hero.attackSeconds, hero.equipment, hero.inventory, hero.stash, hero.talents, hero.talentPoints, hero.statPoints, hero.currencies, hero.inventoryCapacity]);
     if (fingerprint === this.inventoryFingerprint) return;
     this.inventoryFingerprint = fingerprint;
     const focused = document.activeElement?.dataset.actionKey;
     this.text('panel-title', `${CLASSES[hero.classId]?.name || 'Wanderer'} · Level ${hero.level || 1}`);
-    this.text('inventory-count', `${hero.inventory?.length || 0} / 24`);
+    this.text('inventory-count', `${hero.inventory?.length || 0} / ${inventoryCapacity(hero)}`);
     const stats = this.nodes['hero-stats']; stats.replaceChildren();
     for (const [key, value] of Object.entries({ ...hero.stats, damage: hero.damage, maxHp: hero.maxHp, armor: hero.armor, crit: hero.crit, speed: hero.speed, range: hero.range, attackSeconds: hero.attackSeconds })) {
       const pair = element('div'); pair.append(element('dt', '', labels[key] || key), element('dd', '', valueText(key, value))); stats.append(pair);
@@ -174,6 +176,8 @@ export class UI {
       command(row,'Learn','learn',node.id);command(row,`Refund · ${talentCost(hero)} gold`,'refund',node.id);talentRoot.append(row);
     }
     const shop=document.getElementById('merchant-list');shop.replaceChildren();
+    command(shop, inventoryCapacity(hero)>=500?'Pack maximum · 500 slots':`Expand pack +${Math.min(4,500-inventoryCapacity(hero))} slots · ${inventoryExpansionCost(hero)} gold`,'expandInventory');
+    shop.lastElementChild.id='expand-inventory';shop.lastElementChild.disabled=inventoryCapacity(hero)>=500||hero.currencies.gold<inventoryExpansionCost(hero);
     command(shop,'Salvage Unfavorited · keep Legendary gear','salvageAll');
     shop.lastElementChild.id='salvage-unfavorited';
     shop.lastElementChild.disabled=!hero.inventory.some(item=>!item.favorite&&item.rarity!=='legendary');
@@ -187,7 +191,7 @@ export class UI {
       else { const card = element('article', 'item-card empty-slot'); card.append(element('h4', '', `No ${slot} equipped`), element('p', '', 'Equip a find from your inventory.')); this.nodes['equipment-list'].append(card); }
     }
     this.nodes['inventory-list'].replaceChildren();
-    for (const item of filterItems(hero.inventory||[],document.getElementById('item-filter').value,document.getElementById('item-sort').value).slice(0, 24)) this.nodes['inventory-list'].append(this.itemCard(item, false));
+    for (const item of filterItems(hero.inventory||[],document.getElementById('item-filter').value,document.getElementById('item-sort').value).slice(0, inventoryCapacity(hero))) this.nodes['inventory-list'].append(this.itemCard(item, false));
     if (!hero.inventory?.length) this.nodes['inventory-list'].append(element('p', 'empty-inventory', 'Your pack is empty. Fallen enemies may leave equipment behind.'));
     if (focused) {
       const replacement = [...this.nodes['inventory-overlay'].querySelectorAll('[data-action-key]')].find(node => node.dataset.actionKey === focused && !node.disabled);
@@ -217,7 +221,7 @@ export class UI {
     if(item.upgrades)card.append(element('p','',`Forged +${item.upgrades}`));
     const button = element('button', 'item-action', equipped ? 'Unequip' : 'Equip'); button.type = 'button';
     button.dataset.actionKey = equipped ? `unequip-${item.slot}` : `equip-${item.id}`;
-    button.disabled = equipped && (this.hero.inventory?.length || 0) >= 24;
+    button.disabled = equipped && (this.hero.inventory?.length || 0) >= inventoryCapacity(this.hero);
     if (button.disabled) button.title = 'Inventory full — equip a different item to swap.';
     button.addEventListener('click', () => equipped ? this.callbacks.onUnequip?.(item.slot) : this.callbacks.onEquip?.(item.id));
     card.append(button);
@@ -228,6 +232,13 @@ export class UI {
       }
     }
     return card;
+  }
+
+  setBackgroundAutomation(enabled) {
+    const button = this.nodes['background-toggle'];
+    button.setAttribute('aria-pressed', String(Boolean(enabled)));
+    button.textContent = enabled ? 'Hidden automation on' : 'Run while hidden';
+    button.title = enabled ? 'Automation continues when this tab is hidden' : 'Allow automation to continue when this tab is hidden';
   }
 
   setMode(mode) {
@@ -249,7 +260,9 @@ export class UI {
     this.nodes.modal.hidden = playing || inventory || state === 'teleporting'; this.nodes['inventory-overlay'].hidden = !inventory;
     document.getElementById('teleport-status').hidden=state!=='teleporting';
     document.getElementById('mode-toggle').disabled=!playing;
-    this.nodes['pause-button'].disabled = !playing; this.nodes.hud.inert = !playing;
+    this.nodes['pause-button'].disabled = !playing;
+    this.nodes['background-toggle'].disabled = !playing;
+    this.nodes.hud.inert = !playing;
     document.getElementById('game').inert = !playing;
     if (state === 'teleporting') { document.activeElement?.blur(); return; }
     if (playing) { document.getElementById('game').focus({ preventScroll: true }); return; }

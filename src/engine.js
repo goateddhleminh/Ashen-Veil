@@ -16,12 +16,27 @@ export class Engine {
     this.scene.background = new THREE.Color(0x121c20);
     this.scene.fog = new THREE.FogExp2(0x121c20, .025);
     // Fixed 60 Hz simulation makes attack timing independent of the display refresh rate.
-    let previous = performance.now(), accumulator = 0;
-    this.renderer.setAnimationLoop(now => {
-      const dt = Math.min(Math.max((now - previous) / 1000, 0), .1);
-      previous = now;
-      accumulator += document.hidden ? 0 : dt;
+    let previous = performance.now(), hiddenPrevious = previous, accumulator = 0;
+    this.backgroundSimulation = false;
+    const step = elapsed => {
+      // A hidden tab may be timer-throttled for seconds; cap catch-up to avoid a
+      // burst while still advancing wall-clock time when callbacks resume.
+      accumulator = Math.min(accumulator + Math.max(0, elapsed), 5);
       while (accumulator >= 1 / 60) { update(1 / 60); accumulator -= 1 / 60; }
+    };
+    this.backgroundTimer = window.setInterval(() => {
+      if (!document.hidden || !this.backgroundSimulation) return;
+      const now = performance.now();
+      step(Math.min(Math.max((now - hiddenPrevious) / 1000, 0), 5));
+      hiddenPrevious = now;
+    }, 100);
+    this.renderer.setAnimationLoop(now => {
+      const dt = Math.min(Math.max((now - previous) / 1000, 0), .25);
+      previous = now;
+      if (!document.hidden) {
+        hiddenPrevious = now;
+        step(dt);
+      } else if (!this.backgroundSimulation) accumulator = 0;
       render(dt);
     });
   }
@@ -35,6 +50,7 @@ export class Engine {
   }
   dispose() {
     this.renderer.setAnimationLoop(null);
+    if (this.backgroundTimer) { window.clearInterval(this.backgroundTimer); this.backgroundTimer = null; }
     const geometries = new Set(), materials = new Set();
     this.scene.traverse(o => {
       if (o.geometry) geometries.add(o.geometry);

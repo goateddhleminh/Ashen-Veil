@@ -1,11 +1,13 @@
-import { CLASSES, RARITIES, recomputeStats } from './progression.js';
+import { CLASSES, RARITIES, recomputeStats, INVENTORY_BASE_CAPACITY, INVENTORY_MAX_CAPACITY } from './progression.js';
 import { xpForLevel } from './data.js';
 import { TALENTS } from './talents.js';
 import { LEGENDARIES } from './items.js';
 import { REGIONS, isDifficulty } from './regions.js';
 import { QUESTS } from './quests.js';
+import { validateEventsState, normalizeEventsState } from './events.js';
 
-const VERSION = 1;
+const VERSION = 2;
+const PREVIOUS_VERSION = 1;
 const slots = ['weapon', 'armor', 'helm', 'gloves', 'boots', 'ring'];
 const attributes = ['strength', 'intelligence', 'dexterity', 'vitality'];
 const modifiers = [...attributes, 'damage', 'armor', 'life', 'crit', 'lifeOnHit', 'attackSpeed', 'cooldownReduction'];
@@ -19,7 +21,7 @@ function storageOrDefault(storage) { return storage ?? globalThis.localStorage; 
 
 // Only durable plain data crosses this boundary; models and encounter timers never do.
 export function createSave(hero, worldState = {}) {
-  const fields = ['classId', 'level', 'xp', 'hp', 'baseStats', 'equipment', 'inventory', 'currencies', 'potions', 'statPoints'];
+  const fields = ['classId', 'level', 'xp', 'hp', 'baseStats', 'equipment', 'inventory', 'currencies', 'potions', 'statPoints', 'inventoryCapacity', 'manaPotions', 'portalScrolls', 'resetTokens', 'dust', 'shards', 'reaperFragments', 'socketGems', 'eventRewards', 'eventAppearance'];
   const durable = Object.fromEntries(fields.map(field => [field, hero[field]]));
   durable.stash = hero.stash ?? [];
   durable.talents = hero.talents ?? {};
@@ -31,12 +33,13 @@ export function loadSave(raw, classId) {
   try {
     if (typeof raw !== 'string' || raw.length > 1000000) return fail('Save is missing or too large.');
     const data = JSON.parse(raw), h = data?.hero;
-    if (!record(data) || data.version !== VERSION) return fail('Unsupported save version.');
+    if (!record(data) || ![PREVIOUS_VERSION, VERSION].includes(data.version)) return fail('Unsupported save version.');
+     if (data.version === PREVIOUS_VERSION) { data.version = VERSION; data.hero.inventoryCapacity = INVENTORY_BASE_CAPACITY; }
     if (!record(h) || !Object.hasOwn(CLASSES, h.classId) || h.classId !== classId) return fail('Save belongs to a different class.');
-    if (!integer(h.level, 100) || h.level < 1 || !integer(h.xp) || !number(h.hp) || !integer(h.potions, 9999) || !integer(h.statPoints, 10000) || !integer(h.talentPoints, 10000)) return fail('Invalid character values.');
+    if ((h.inventoryCapacity ?? INVENTORY_BASE_CAPACITY) < INVENTORY_BASE_CAPACITY || !integer(h.inventoryCapacity ?? INVENTORY_BASE_CAPACITY, INVENTORY_MAX_CAPACITY) || !['manaPotions','portalScrolls','resetTokens','dust','shards','reaperFragments'].every(k=>h[k]===undefined||integer(h[k],1e9)) || (h.socketGems!==undefined&&(!record(h.socketGems)||!Object.entries(h.socketGems).every(([k,v])=>['ruby','sapphire','emerald'].includes(k)&&integer(v,1e9)))) || (h.eventRewards!==undefined&&(!Array.isArray(h.eventRewards)||!h.eventRewards.every(r=>record(r)&&['title','cosmetic','weaponSkin'].includes(r.type)&&typeof r.id==='string'&&r.id.length<=100))) || (h.eventAppearance!==undefined&&(!record(h.eventAppearance)||!['title','cosmetic','weaponSkin'].every(k=>h.eventAppearance[k]===undefined||typeof h.eventAppearance[k]==='string'))) || !integer(h.level, 100) || h.level < 1 || !integer(h.xp) || !number(h.hp) || !integer(h.potions, 9999) || !integer(h.statPoints, 10000) || !integer(h.talentPoints, 10000)) return fail('Invalid character values.');
     if (!record(h.baseStats) || !attributes.every(a => integer(h.baseStats[a], 10000))) return fail('Invalid attributes.');
     if (!record(h.currencies) || !['gold', 'gems', 'diamonds'].every(c => integer(h.currencies[c]))) return fail('Invalid currency.');
-    if (!Array.isArray(h.inventory) || h.inventory.length > 24 || !Array.isArray(h.stash) || h.stash.length > 48 || !record(h.equipment)) return fail('Invalid inventory.');
+    if (!Array.isArray(h.inventory) || h.inventory.length > (h.inventoryCapacity ?? INVENTORY_BASE_CAPACITY) || !Array.isArray(h.stash) || h.stash.length > 48 || !record(h.equipment)) return fail('Invalid inventory.');
     if (!Object.keys(h.equipment).every(s => slots.includes(s))) return fail('Unknown equipment slot.');
     const ids = new Set();
     const validItem = item => {
@@ -59,7 +62,9 @@ export function loadSave(raw, classId) {
       if (Array.isArray(value)) return value.length <= 200 && value.every(v => validWorld(v, depth + 1));
       return record(value) && Object.keys(value).length <= 100 && Object.entries(value).every(([k, v]) => !['__proto__', 'constructor', 'prototype'].includes(k) && validWorld(v, depth + 1));
     };
-    if (!validWorld(data.world)) return fail('Invalid world progress.');
+    const { events, ...ordinaryWorld } = data.world;
+    if (!validWorld(ordinaryWorld) || !validateEventsState(events)) return fail('Invalid world progress.');
+    if (events !== undefined) data.world.events = normalizeEventsState(events);
     const world=data.world;
     if(world.difficulty!==undefined&&!isDifficulty(world.difficulty))return fail('Invalid difficulty.');
     if(world.highestTier!==undefined&&!integer(world.highestTier,100))return fail('Invalid expedition tier.');
