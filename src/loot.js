@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createItem, RARITIES } from './progression.js';
-import { shouldAutoSalvage, shouldAutoSalvageExact, salvageValue } from './economy.js';
+import { shouldAutoSalvage, shouldAutoSalvageExact, salvageValue, shouldAutoSell, saleValueForCurrency, canCreditSale } from './economy.js';
 import { inventoryCapacity, isEquipmentUpgrade, recomputeStats } from './progression.js';
 
 const COLORS = { gold: '#e7bf61', gems: '#64cbbd', diamonds: '#b3d9ff', potion: '#ef7474' };
@@ -49,8 +49,11 @@ ${Object.entries(drop.item.mods).filter(([,v])=>v).map(([k,v])=>`+${v} ${k}`).jo
     drop.active = true; drop.mesh.visible = drop.beam.visible = true;
   }
   canAutoEquip(hero, item) { return this.automation === true && this.settings.autoEquip !== false && isEquipmentUpgrade(hero, item); }
+  matchesAutoSell(item) { return this.automation === true && shouldAutoSell(item, this.settings.autoSell); }
   canCollect(hero, drop) {
-    return drop.active && (drop.kind !== 'gear' || this.canAutoEquip(hero, drop.item) || (this.settings.autoSalvageExact && this.settings.autoSalvageExact !== 'none' ? shouldAutoSalvageExact(drop.item,this.settings.autoSalvageExact) : shouldAutoSalvage(drop.item,this.settings.autoSalvage)) || hero.inventory.length < inventoryCapacity(hero)) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
+    const autoSell = drop.kind === 'gear' && this.matchesAutoSell(drop.item);
+    const dispose = autoSell ? canCreditSale(hero,drop.item,this.settings.autoSell.currency) : (this.settings.autoSalvageExact && this.settings.autoSalvageExact !== 'none' ? shouldAutoSalvageExact(drop.item,this.settings.autoSalvageExact) : shouldAutoSalvage(drop.item,this.settings.autoSalvage));
+    return drop.active && (drop.kind !== 'gear' || this.canAutoEquip(hero, drop.item) || dispose || (!autoSell && hero.inventory.length < inventoryCapacity(hero))) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
   }
   update(hero, dt) {
     this.time += dt;
@@ -72,6 +75,14 @@ ${Object.entries(drop.item.mods).filter(([,v])=>v).map(([k,v])=>`+${v} ${k}`).jo
           this.selected = null;
         } else { if (previous) hero.inventory.push(previous); this.remove(drop); }
         this.onNotice(`Auto-equipped ${item.name}`); return;
+      }
+      if (this.matchesAutoSell(drop.item)) {
+        const item=drop.item,currency=this.settings.autoSell.currency;
+        if(!canCreditSale(hero,item,currency)){this.onNotice(`Cannot auto-sell: ${currency} wallet limit reached.`);this.selected=null;return;}
+        const value=saleValueForCurrency(item,currency);hero.currencies[currency]+=value;
+        const payload={kind:'gear',item,amount:1,autoSold:true,currency,value};
+        this.onCollect?.(payload);this.onSell?.(payload);
+        this.onNotice(`Auto-sold ${item.name} (+${value} ${currency})`);this.remove(drop);return;
       }
       if ((this.settings.autoSalvageExact && this.settings.autoSalvageExact !== 'none' ? shouldAutoSalvageExact(drop.item,this.settings.autoSalvageExact) : shouldAutoSalvage(drop.item,this.settings.autoSalvage))) {
         const gems=salvageValue(drop.item);hero.currencies.gems+=gems;

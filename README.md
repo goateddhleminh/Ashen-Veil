@@ -27,7 +27,8 @@ Return to Ember Refuge to restore life and resource and use the merchant, forge 
 | E | Open a nearby chest, activate a shrine or enter an unlocked stage portal in Manual mode |
 | Q | Healing potion: restores 45% maximum life; four-second cooldown; no consumption at full health |
 | C | Character, travel, quests, talents and equipment |
-| I | Inventory, filtering, merchant, forge and stash |
+| I | Inventory, filtering, deletion and Auto-sell options |
+| B | Shops: merchant, pack expansion and stash (refuge services) |
 | J | Events, reward claims, Tower controls, supplies and appearance |
 | Escape | Close a panel or pause/resume |
 
@@ -48,6 +49,7 @@ Panels pause combat, regeneration, buffs and cooldowns; event supplies have expl
 - Graveyard Ember shrines grant 30 seconds of doubled resource regeneration; Marsh Renewal shrines heal 50% maximum life; Citadel Ward shrines grant ten seconds of protection. Each activates once per visit.
 - Choose Normal, Nightmare or Hell at the refuge. Campaign encounters are capped to Normal levels 1–12, Nightmare 13–22 and Hell 23–30; higher tiers increase health and damage. Expedition scaling remains independent of these caps. Stage progress resets on travel.
 - Auto-salvage converts eligible pickups directly into gems. The threshold option includes lower rarities; selecting an exact Common, Magic or Rare option overrides that threshold and salvages only that rarity. Favorites and Legendary gear remain protected from automatic and bulk salvage. Bulk salvage and affix rerolls are available at the refuge.
+- Inventory **Auto-sell** is off by default. Enable it and select both rarities and item types; an item must match both lists. Choose Gold coins, Gems or Diamonds. Gold uses the normal sale value; Gems pay at least 1 or floor(gold value / 50), Diamonds at least 1 or floor(gold value / 200). Automation evaluates upgrades first, then sells matching inventory and ground gear before auto-salvage. Favorites and equipped items are protected; Legendary gear sells only when explicitly selected. Settings persist across sessions. Delete removes an unfavorited inventory item without a payout, including outside the refuge.
 - Auto-equip is enabled by default in settings and runs only during Automation. It compares compatible inventory equipment using a stat score; it is a convenience heuristic, not a guarantee of the best build.
 
 Expeditions unlock after the campaign. Defeat 20 enemies and a guardian, then claim the completion reward before leaving. Clear a tier to unlock the next (up to 100). Six modifier types rotate in pairs; three bounty types offer additional claimable currency rewards. Equipment drops scale with character level plus expedition tier, capped at item level 100; enemy XP scales with reward level. Highest cleared tier persists; the active encounter does not.

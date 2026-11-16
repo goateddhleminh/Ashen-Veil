@@ -17,8 +17,8 @@ const element = (tag, className, text) => {
 
 // Presentation only: simulation and pause ownership remain in main.js.
 export class UI {
-  constructor({ onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy }) {
-    this.callbacks = { onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy };
+  constructor({ onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy, onAutoSellChange }) {
+    this.callbacks = { onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy, onAutoSellChange };
     document.getElementById('continue-game').onclick = () => onContinue?.(this.selectedClass);
     document.getElementById('export-save').onclick = () => onExport?.(this.selectedClass);
     document.getElementById('import-save').onclick = () => document.getElementById('save-file').click();
@@ -32,16 +32,20 @@ export class UI {
     this.hero = null;
     this.inventoryFingerprint = '';
     this.announcementTimer = null;
+    this.shopAvailable = false;
+    this.autoSell = { enabled: false, rarities: [], types: [], currency: 'gold' };
     this.nodes = Object.fromEntries([
       'hud', 'modal', 'modal-title', 'modal-eyebrow', 'modal-description', 'modal-action', 'modal-hint',
       'pause-button', 'background-toggle', 'health-globe', 'health-current', 'health-max', 'level', 'kills', 'enemy-count',
       'xp-text', 'xp-fill', 'xp-meter', 'announcement', 'class-selection', 'class-options',
-      'character-button', 'inventory-button', 'potion-button', 'potions', 'gold', 'gems', 'diamonds',
+      'character-button', 'inventory-button', 'shops-button', 'shops-tab', 'shops-panel', 'potion-button', 'potions', 'gold', 'gems', 'diamonds', 'dust', 'shards',
+      'panel-status', 'panel-gold', 'panel-gems', 'panel-diamonds', 'panel-dust', 'panel-shards',
       'inventory-overlay', 'panel-title', 'panel-close', 'character-tab', 'inventory-tab',
       'events-button', 'events-tab', 'events-panel', 'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
     ].map(id => [id, document.getElementById(id)]));
     for(const id of ['item-filter','item-sort']) document.getElementById(id).onchange=()=>{this.inventoryFingerprint='';this.renderPanel();};
     this.buildClasses();
+    this.buildAutoSell();
     for (const root of [this.nodes.modal, this.nodes['inventory-overlay'], this.nodes['pause-button'], document.querySelector('.hero-controls'), document.querySelector('.combat-mode')]) {
       for (const type of ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'dblclick', 'contextmenu', 'click']) {
         root.addEventListener(type, event => event.stopPropagation());
@@ -51,7 +55,7 @@ export class UI {
         if (event.key === 'Tab' && ['ready', 'paused', 'dead', 'inventory'].includes(this.state)) this.trapFocus(event);
         const gameplayKey=['Digit1','Digit2','Digit3','Digit4','Space','KeyE'].includes(event.code);
         if(this.state==='playing'&&gameplayKey){event.preventDefault();return;}
-        if (!['escape', 'c', 'i', 'j', 'q'].includes(event.key.toLowerCase())) event.stopPropagation();
+        if ((event.key !== 'Escape' && event.target.matches('input, select, textarea')) || !['escape', 'c', 'i', 'b', 'j', 'q'].includes(event.key.toLowerCase())) event.stopPropagation();
       });
       root.addEventListener('keyup', event => event.stopPropagation());
     }
@@ -62,14 +66,14 @@ export class UI {
       else if (this.state === 'dead') this.callbacks.onRestart?.(this.selectedClass);
       else if (this.state === 'paused') this.callbacks.onPause?.();
     });
-    for (const tab of ['character', 'inventory', 'events']) {
+    for (const tab of ['character', 'inventory', 'shops', 'events']) {
       this.nodes[`${tab}-button`].addEventListener('click', () => { this.selectTab(tab); this.callbacks.onPanel?.(); });
       this.nodes[`${tab}-tab`].addEventListener('click', () => this.selectTab(tab));
       this.nodes[`${tab}-tab`].addEventListener('keydown', event => {
         if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
           event.preventDefault();
-          const tabs=['character','inventory','events'];
-          const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[2] : tabs[(tabs.indexOf(tab)+(event.key==='ArrowRight'?1:2))%3];
+          const tabs=['character','inventory','shops','events'];
+          const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : tabs[(tabs.indexOf(tab)+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];
           this.selectTab(next); this.nodes[`${next}-tab`].focus();
         }
       });
@@ -78,6 +82,41 @@ export class UI {
     this.nodes['panel-close'].addEventListener('click', () => this.callbacks.onPanel?.());
     this.nodes['inventory-overlay'].addEventListener('click', event => { if (event.target === this.nodes['inventory-overlay']) this.callbacks.onPanel?.(); });
     this.setState('ready');
+  }
+
+  buildAutoSell() {
+    for (const [group, values] of Object.entries({ rarities: ['common', 'magic', 'rare', 'legendary'], types: ['sword', 'staff', 'bow', 'armor', 'helm', 'gloves', 'boots', 'ring'] })) {
+      const root = document.getElementById(`auto-sell-${group}`);
+      for (const value of values) {
+        const label = element('label'), input = element('input');
+        input.type = 'checkbox'; input.value = value; input.name = `auto-sell-${group}`;
+        label.append(input, document.createTextNode(` ${value[0].toUpperCase()}${value.slice(1)}`)); root.append(label);
+      }
+    }
+    document.getElementById('auto-sell-controls').addEventListener('change', () => {
+      const selected = group => [...document.querySelectorAll(`input[name="auto-sell-${group}"]:checked`)].map(input => input.value);
+      const config = { enabled: document.getElementById('auto-sell-enabled').checked, rarities: selected('rarities'), types: selected('types'), currency: document.getElementById('auto-sell-currency').value };
+      this.setAutoSell(config);
+      this.callbacks.onAutoSellChange?.({ ...config, rarities: [...config.rarities], types: [...config.types] });
+    });
+    this.setAutoSell(this.autoSell);
+  }
+
+  setAutoSell(config = {}) {
+    this.autoSell = { enabled: Boolean(config.enabled), rarities: Array.isArray(config.rarities) ? [...config.rarities] : [], types: Array.isArray(config.types) ? [...config.types] : [], currency: ['gold', 'gems', 'diamonds'].includes(config.currency) ? config.currency : 'gold' };
+    document.getElementById('auto-sell-enabled').checked = this.autoSell.enabled;
+    for (const group of ['rarities', 'types']) for (const input of document.querySelectorAll(`input[name="auto-sell-${group}"]`)) input.checked = this.autoSell[group].includes(input.value);
+    document.getElementById('auto-sell-currency').value = this.autoSell.currency;
+    document.getElementById('auto-sell-summary').textContent = this.autoSell.enabled ? 'On · Automation only' : 'Off';
+  }
+
+  setShopAvailable(available) {
+    const next = Boolean(available);
+    document.getElementById('shop-availability').textContent = next ? 'Ember Refuge services are open. Buy supplies, forge gear and manage your stash.' : 'Services unavailable here. Return to Ember Refuge using Character → Travel to buy, forge, sell, salvage or use your stash.';
+    if (this.shopAvailable === next) return;
+    this.shopAvailable = next;
+    this.inventoryFingerprint = '';
+    this.renderPanel();
   }
 
   buildClasses() {
@@ -113,9 +152,9 @@ export class UI {
   }
 
   selectTab(tab) {
-    if (!['character', 'inventory', 'events'].includes(tab)) return;
+    if (!['character', 'inventory', 'shops', 'events'].includes(tab)) return;
     this.activeTab = tab;
-    for (const id of ['character', 'inventory', 'events']) {
+    for (const id of ['character', 'inventory', 'shops', 'events']) {
       this.nodes[`${id}-panel`].hidden = tab !== id;
       this.nodes[`${id}-tab`].setAttribute('aria-selected', String(tab === id));
       this.nodes[`${id}-tab`].tabIndex = tab === id ? 0 : -1;
@@ -139,7 +178,10 @@ export class UI {
     this.text('health-current', Math.ceil(hp)); this.text('health-max', `/ ${Math.ceil(maxHp)}`);
     this.text('level', Math.max(1, Math.floor(finite(hero.level, 1)))); this.text('kills', Math.max(0, Math.floor(finite(kills))));
     this.text('enemy-count', Math.max(0, Math.floor(finite(enemyCount)))); this.text('xp-text', `${Math.floor(xp)} / ${Math.floor(xpNeeded)}`);
-    for (const key of ['gold', 'gems', 'diamonds']) this.text(key, number(hero.currencies?.[key]));
+    for (const key of ['gold', 'gems', 'diamonds', 'dust', 'shards']) {
+      this.text(key, number(['dust','shards'].includes(key)?hero[key]:hero.currencies?.[key]));
+      this.text(`panel-${key}`, number(['dust','shards'].includes(key)?hero[key]:hero.currencies?.[key]));
+    }
     this.text('potions', `${finite(hero.potions)}${hero.potionCooldown>0?` · ${hero.potionCooldown.toFixed(1)}s`:''}`);
     this.nodes['potion-button'].title='Restores 45% maximum health · 4s cooldown';
     this.nodes['potion-button'].disabled = this.state !== 'playing' || !hero.potions || hp >= maxHp || hp <= 0 || hero.potionCooldown > 0;
@@ -169,7 +211,7 @@ export class UI {
     document.getElementById('talent-list').replaceChildren();
     const talentRoot=document.getElementById('talent-list');
     talentRoot.append(element('p','',`${hero.talentPoints??0} talent points · ${hero.statPoints??0} attribute points`));
-    const command=(root,label,op,id)=>{const b=element('button','item-action',label); b.type='button'; b.onclick=()=>this.callbacks.onEconomy?.(op,id); root.append(b);};
+    const command=(root,label,op,id)=>{const b=element('button','item-action',label); b.type='button'; b.dataset.actionKey=`${op}-${id??'all'}`; b.onclick=()=>this.callbacks.onEconomy?.(op,id); if(['buy','retrieve','refund','salvageAll'].includes(op)&&!this.shopAvailable){b.disabled=true;b.title='Return to Ember Refuge to use this service.';} root.append(b);};
     for(const key of ['strength','intelligence','dexterity','vitality'])command(talentRoot,`+ ${key}`,'stat',key);
     for(const node of TALENTS[hero.classId]) {
       const row=element('article','item-card');row.append(element('h4','',`${node.name} ${hero.talents?.[node.id]??0}/3`),element('p','',`+${node.value} ${node.stat} per rank`));
@@ -180,7 +222,7 @@ export class UI {
     shop.lastElementChild.id='expand-inventory';shop.lastElementChild.disabled=inventoryCapacity(hero)>=500||hero.currencies.gold<inventoryExpansionCost(hero);
     command(shop,'Salvage Unfavorited · keep Legendary gear','salvageAll');
     shop.lastElementChild.id='salvage-unfavorited';
-    shop.lastElementChild.disabled=!hero.inventory.some(item=>!item.favorite&&item.rarity!=='legendary');
+    shop.lastElementChild.disabled=!this.shopAvailable||!hero.inventory.some(item=>!item.favorite&&item.rarity!=='legendary');
     for(const slot of ['potion',...slots])command(shop,`${slot} · ${slot==='potion'?35:120*hero.level} gold`,'buy',slot);
     const stash=document.getElementById('stash-list');stash.replaceChildren();
     for(const item of hero.stash??[])command(stash,`Retrieve ${item.name}`,'retrieve',item.id);
@@ -227,8 +269,11 @@ export class UI {
     card.append(button);
     if(!equipped) {
       const cost=craftCost(item), reroll=rerollCost(item);
-      for(const [op,label] of [['favorite',item.favorite?'Unfavorite':'Favorite'],['stash','Store'],['sell',`Sell · ${saleValue(item)} gold`],['salvage','Salvage for gems'],['reroll',`Reroll bonus · ${reroll.gold} gold / ${reroll.gems} gems`],['upgrade',`Upgrade +${(item.upgrades??0)+1} · ${cost.gold} gold / ${cost.gems} gems / ${cost.diamonds} diamonds`]]) {
-        const action=element('button','item-action',label);action.type='button';action.onclick=()=>this.callbacks.onEconomy?.(op,item.id);card.append(action);
+      for(const [op,label] of [['favorite',item.favorite?'Unfavorite':'Favorite'],['stash','Store'],['sell',`Sell · ${saleValue(item)} gold`],['salvage','Salvage for gems'],['delete','Delete permanently'],['reroll',`Reroll bonus · ${reroll.gold} gold / ${reroll.gems} gems`],['upgrade',`Upgrade +${(item.upgrades??0)+1} · ${cost.gold} gold / ${cost.gems} gems / ${cost.diamonds} diamonds`]]) {
+        const action=element('button',`item-action${op==='delete'?' delete-action':''}`,label);action.type='button';action.dataset.actionKey=`${op}-${item.id}`;action.onclick=()=>this.callbacks.onEconomy?.(op,item.id);
+        if(['stash','sell','salvage','reroll','upgrade'].includes(op)&&!this.shopAvailable){action.disabled=true;action.title='Return to Ember Refuge to use this service.';}
+        if(item.favorite&&['sell','salvage','delete'].includes(op)){action.disabled=true;action.title='Unfavorite this item first.';}
+        card.append(action);
       }
     }
     return card;
@@ -269,7 +314,7 @@ export class UI {
     if (inventory) { this.renderPanel(); this.nodes[`${this.activeTab}-tab`].focus({ preventScroll: true }); return; }
     this.nodes['class-selection'].hidden = state !== 'ready';
     const copy = {
-      ready: ['A light where none remains', 'ASHEN VEIL', 'Choose your calling and begin in Ember Refuge.\nOpen Character to travel, track quests and claim rewards. Defeat three guardians to unlock expeditions.', 'Begin journey', 'Manual: left click to move · Hold right mouse to attack · E Interact · 1/2/3 Skills · Space Dodge · C Character · I Inventory · Q Potion'],
+      ready: ['A light where none remains', 'ASHEN VEIL', 'Choose your calling and begin in Ember Refuge.\nOpen Character to travel, track quests and claim rewards. Defeat three guardians to unlock expeditions.', 'Begin journey', 'Manual: left click to move · Hold right mouse to attack · E Interact · 1/2/3 Skills · Space Dodge · C Character · I Inventory · B Shops · Q Potion'],
       paused: ['A moment between shadows', 'THE VEIL WAITS', 'Rest your weapon, wanderer.\nThe world will be here when you return.', 'Resume journey', 'Your journey is paused.'],
       dead: ['Even embers fall to ash', 'YOU HAVE FALLEN', 'Return to Ember Refuge with your equipment and progress intact.\nDeath costs 10% of carried gold, up to 500 gold.', 'Return to refuge', 'Active encounters and expedition progress reset.'],
     }[state];
@@ -279,6 +324,7 @@ export class UI {
 
   announce(text) {
     clearTimeout(this.announcementTimer); this.text('announcement', text);
+    this.text('panel-status', text); this.nodes['panel-status'].hidden = !text;
     this.nodes.announcement.classList.toggle('visible', Boolean(text));
     if (text) this.announcementTimer = setTimeout(() => this.nodes.announcement.classList.remove('visible'), 2800);
   }

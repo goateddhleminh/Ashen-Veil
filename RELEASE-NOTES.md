@@ -2,6 +2,13 @@
 
 This release expands the original arena into a single-player campaign with Ember Refuge, the Forgotten Graveyard, Cinder Marsh and Hollow Citadel. Nine quests and three guardians lead to repeatable tiered expeditions.
 
+## Shops and filtered Auto-sell
+
+- Added **B / Shops** with merchant and stash services, clear refuge-only availability, and transaction feedback inside the open dialog. Inventory now includes Delete; favorites cannot be deleted.
+- Gold coins, gems, diamonds, dust and shards appear in both the HUD and panel header.
+- Inventory Auto-sell defaults off. Select rarities AND equipment types, then choose coins, gems or diamonds. It runs only in Automation, evaluates upgrades first, protects favorites/equipped gear and supports full-pack ground sales. Legendary sales require explicit selection. Settings persist; wallet overflow does not consume gear.
+- Verified filtered sales, currency conversion, settings, buying, deletion, visible failures, full-pack pickup and wallet rendering with logic and browser checks.
+
 ## Events, inventory and automation update
 
 - Added the **J** Events panel with First Steps, Rookie 7-Day Trial, Zone Conquest, Infernal Tower and Blood Moon. **E** remains the nearby world interaction key. Claims require completed objectives and enough pack space for gear; choice rewards require a selection.

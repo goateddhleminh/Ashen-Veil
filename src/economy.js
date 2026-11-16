@@ -2,11 +2,48 @@ import { createItem, inventoryCapacity, inventoryExpansionCost, INVENTORY_MAX_CA
 const result=(ok,message)=>({ok,message});
 const find=(hero,id)=>hero.inventory.findIndex(item=>item.id===id);
 export const saleValue=item=>Math.max(1,item.level*({common:8,magic:15,rare:30,legendary:65}[item.rarity]??8));
-export function sellItem(hero,id) {
+export const SALE_CURRENCY_DIVISORS=Object.freeze({gold:1,gems:50,diamonds:200});
+export const WALLET_MAX=1e9;
+export const AUTO_SELL_RARITIES=Object.freeze(['common','magic','rare','legendary']);
+export const AUTO_SELL_TYPES=Object.freeze(['sword','staff','bow','armor','helm','gloves','boots','ring']);
+export function itemSaleType(item) {
+ return item?.slot==='weapon'?({warrior:'sword',mage:'staff',archer:'bow'}[item.classId]??null):AUTO_SELL_TYPES.includes(item?.slot)?item.slot:null;
+}
+export function saleValueForCurrency(item,currency='gold') {
+ if(!item || !Object.hasOwn(SALE_CURRENCY_DIVISORS,currency))return 0;
+ const gold=saleValue(item);
+ return Number.isFinite(gold)?(currency==='gold'?gold:Math.max(1,Math.floor(gold/SALE_CURRENCY_DIVISORS[currency]))):0;
+}
+export function validAutoSellConfig(config) {
+ return Boolean(config&&typeof config.enabled==='boolean'&&Array.isArray(config.rarities)&&config.rarities.every(r=>AUTO_SELL_RARITIES.includes(r))&&Array.isArray(config.types)&&config.types.every(t=>AUTO_SELL_TYPES.includes(t))&&Object.hasOwn(SALE_CURRENCY_DIVISORS,config.currency));
+}
+export function shouldAutoSell(item,config) {
+ return Boolean(item&&!item.favorite&&validAutoSellConfig(config)&&config.enabled&&config.rarities.includes(item.rarity)&&config.types.includes(itemSaleType(item)));
+}
+export function canCreditSale(hero,item,currency='gold') {
+ const value=saleValueForCurrency(item,currency),balance=hero.currencies?.[currency];
+ return value>0&&Number.isFinite(balance)&&balance>=0&&balance+value<=WALLET_MAX;
+}
+export function sellItem(hero,id,currency='gold') {
  const i=find(hero,id),item=hero.inventory[i];
  if(!item || item.favorite) return result(false,'Item missing or protected by Favorite.');
- const value=saleValue(item);hero.inventory.splice(i,1);hero.currencies.gold+=value;
- return result(true,`Sold ${item.name} for ${value} gold.`);
+ if(!Object.hasOwn(SALE_CURRENCY_DIVISORS,currency))return result(false,'Unknown sale currency.');
+ if(!canCreditSale(hero,item,currency))return result(false,`Cannot sell: ${currency} wallet limit reached or invalid balance.`);
+ const value=saleValueForCurrency(item,currency);hero.inventory.splice(i,1);hero.currencies[currency]+=value;
+ return result(true,`Sold ${item.name} for ${value} ${currency}.`);
+}
+export function deleteItem(hero,id) {
+ const i=find(hero,id),item=hero.inventory[i];
+ if(!item || item.favorite)return result(false,'Item missing or protected by Favorite.');
+ hero.inventory.splice(i,1);return result(true,`Deleted ${item.name}.`);
+}
+export function autoSellInventory(hero,config) {
+ let count=0,total=0;
+ for(const item of [...hero.inventory])if(shouldAutoSell(item,config)) {
+  const value=saleValueForCurrency(item,config.currency);
+  if(sellItem(hero,item.id,config.currency).ok){count++;total+=value;}
+ }
+ return {ok:count>0,count,message:count?`Auto-sold ${count} items for ${total} ${config.currency}.`:'No matching items could be auto-sold.'};
 }
 export const salvageValue=item=>({common:1,magic:2,rare:4,legendary:8}[item.rarity]??0);
 export function shouldAutoSalvage(item,threshold='none') {
@@ -46,7 +83,7 @@ export function stashItem(hero,id) {
 }
 export function retrieveItem(hero,id) {
  const i=(hero.stash??[]).findIndex(item=>item.id===id);
- if(i<0 || hero.inventory.length>=inventoryCapacity(hero)) return result(false,'Item missing or inventory full (24).');
+ if(i<0 || hero.inventory.length>=inventoryCapacity(hero)) return result(false,`Item missing or inventory full (${inventoryCapacity(hero)}).`);
  hero.inventory.push(hero.stash.splice(i,1)[0]);return result(true,'Item retrieved.');
 }
 export function craftCost(item) {const rank=item.upgrades??0;return {gold:100*(rank+1)*item.level,gems:3*(rank+1),diamonds:rank>=2?1:0};}
@@ -81,7 +118,7 @@ export function buyItem(hero,shopId) {
  if(!['potion','weapon','armor','helm','gloves','boots','ring'].includes(shopId))return result(false,'Unknown merchant offer.');
  const cost=shopId==='potion'?35:120*hero.level;
  if(hero.currencies.gold<cost)return result(false,`Requires ${cost} gold.`);
- if(shopId!=='potion' && hero.inventory.length>=inventoryCapacity(hero))return result(false,'Inventory full (24).');
+ if(shopId!=='potion' && hero.inventory.length>=inventoryCapacity(hero))return result(false,`Inventory full (${inventoryCapacity(hero)}).`);
  if(shopId==='potion' && hero.potions>=9999)return result(false,'Potion capacity reached.');
  const item=shopId==='potion'?null:createItem(hero.classId,hero.level,'magic',shopId);
  hero.currencies.gold-=cost;

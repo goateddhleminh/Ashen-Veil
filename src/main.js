@@ -23,7 +23,7 @@ import { REGIONS, BOSSES, DIFFICULTIES, REGION_STAGES, createRegionState, enterR
 import { createStageState, currentStage, canAdvanceStage, advanceStage, isStageComplete } from './stages.js';
 import { QUESTS, advanceQuest, claimQuestReward } from './quests.js';
 import { MODIFIERS, BOUNTIES, beginExpedition, advanceExpedition, claimBounty, claimExpedition } from './expeditions.js';
-import { sellItem, salvageItem, salvageUnfavorited, craftItem, buyItem, stashItem, retrieveItem } from './economy.js';
+import { sellItem, deleteItem, autoSellInventory, validAutoSellConfig, salvageItem, salvageUnfavorited, craftItem, buyItem, stashItem, retrieveItem } from './economy.js';
 import { allocateTalent, refundTalent } from './talents.js';
 import { SKILLS, createSkillState, castSkill, updateSkills, tryDodge } from './skills.js';
 import { saveClass, readClass, applySave, exportSave, importSave, loadSave } from './save.js';
@@ -80,12 +80,13 @@ try {
     } catch { ui.announce('Could not read this save file.'); }
   }
   const ui = new UI({ onStart: start, onRestart: recover, onPause: togglePause, onPanel: togglePanel, onBackgroundToggle: toggleBackgroundAutomation,
-    onEquip: id => action(() => {const item=hero.inventory.find(i=>i.id===id),message=equipItem(hero,id);if(item&&hero.equipment[item.slot]?.id===id)track({type:'equip',slot:item.slot});return message;}), onUnequip: slot => action(() => unequipItem(hero, slot)), onPotion: potion, onContinue: classId => start(classId, true), onSaveStatus: readClass, onExport: downloadSave, onImport: uploadSave, onEconomy: economyAction });
+    onEquip: id => action(() => {const item=hero.inventory.find(i=>i.id===id),message=equipItem(hero,id);if(item&&hero.equipment[item.slot]?.id===id)track({type:'equip',slot:item.slot});return message;}), onUnequip: slot => action(() => unequipItem(hero, slot)), onPotion: potion, onContinue: classId => start(classId, true), onSaveStatus: readClass, onExport: downloadSave, onImport: uploadSave, onEconomy: economyAction, onAutoSellChange: config => { if(!validAutoSellConfig(config))return; settings.autoSell=config; const saved=saveSettings(settings); ui.announce(saved.ok?'Auto-sell settings saved. Applies while Automation is running.':saved.message); } });
   const eventsUI=new EventsUI({onClaim:claimEvent,onStartTower:beginTower,onNextFloor:nextTowerFloor,onLeaveTower:leaveTower,onSummonReaper:()=>{updateEvents(0);refresh();},onUseConsumable:useEventConsumable,onSelectCosmetic:(type,id)=>{const result=selectEventCosmetic(hero,type,id);if(result.ok){applyHeroCosmetics(hero);persist();}ui.announce(result.message??'Appearance updated.');refresh();}});
   engine = new Engine(document.querySelector('#game'), update, render);
   follow = new FollowCamera(engine.renderer);
   const world = new World(engine.scene);
   const settings=loadSettings();
+  ui.setAutoSell(settings.autoSell);
   const audio=new GameAudio();
   document.addEventListener('pointerdown',()=>audio.unlock());document.addEventListener('keydown',()=>audio.unlock());
   const volumeControl=document.getElementById('volume-setting'),muteControl=document.getElementById('mute-setting');
@@ -108,6 +109,7 @@ try {
   const telegraphs=new Telegraphs(engine.scene,enemies);
   const loot = new Loot(engine.scene, text => ui.announce(text), settings);
   loot.onEquip=item=>track({type:'equip',slot:item.slot});
+  loot.onSell=()=>track({type:'sell'});
   loot.onCollect=drop=>{audio.play('loot');if(drop?.item)track({type:'pickup',item:drop.item,rarity:drop.item.rarity});};
   const combat = new Combat(engine.scene, enemy => {
     kills++; runKills++;
@@ -218,7 +220,7 @@ try {
   const normalBar = enemies[0].fill.material;
   const championBar = new THREE.MeshStandardMaterial({ color: 0x6ba9df });
   const eliteBar = new THREE.MeshStandardMaterial({ color: 0xddb34b });
-  function refresh() { renderJourney(); eventsUI.render(campaign.events,hero,{...eventContext(),towerReady:!!towerArena?.ready});eventsUI.updateHud(campaign.events); ui.update(hero, kills, enemies.filter(e => e.active).length, state === 'paused'); }
+  function refresh() { ui.setShopAvailable(campaign.region==='refuge'&&!towerArena); renderJourney(); eventsUI.render(campaign.events,hero,{...eventContext(),towerReady:!!towerArena?.ready});eventsUI.updateHud(campaign.events); ui.update(hero, kills, enemies.filter(e => e.active).length, state === 'paused'); }
   function action(fn) { if (state !== 'playing' && state !== 'inventory') return; ui.announce(fn()); persist(); refresh(); }
   function economyAction(op,id) {
     if(state!=='inventory') return;
@@ -226,7 +228,7 @@ try {
     action(()=>{
       if(op==='favorite') {const item=hero.inventory.find(i=>i.id===id);if(item)item.favorite=!item.favorite;return 'Favorite protection updated.';}
       if(op==='stat')return allocateStat(hero,id);
-      const operations={sell:sellItem,salvage:salvageItem,salvageAll:salvageUnfavorited,buy:buyItem,stash:stashItem,retrieve:retrieveItem,learn:allocateTalent,refund:refundTalent,upgrade:(h,i)=>craftItem(h,'upgrade',i),reroll:(h,i)=>craftItem(h,'reroll',i)};
+      const operations={sell:sellItem,delete:deleteItem,salvage:salvageItem,salvageAll:salvageUnfavorited,buy:buyItem,stash:stashItem,retrieve:retrieveItem,learn:allocateTalent,refund:refundTalent,upgrade:(h,i)=>craftItem(h,'upgrade',i),reroll:(h,i)=>craftItem(h,'reroll',i)};
       if((['upgrade','reroll','refund'].includes(op)||(['sell','salvage'].includes(op)&&hero.inventory.find(i=>i.id===id)?.rarity==='legendary'))&&!window.confirm(`Confirm ${op}? The listed cost or item will be consumed.`))return 'Cancelled.';
       const result=op==='expandInventory'?buyInventoryCapacity(hero):operations[op]?.(hero,id);if(result?.ok&&op==='sell')track({type:'sell'});return result?.message??'Unknown action.';
     });
@@ -257,6 +259,7 @@ try {
     if(event.code==='Space') { event.preventDefault(); dodge(); }
     if (event.code === 'KeyC' || event.code === 'KeyI') { event.preventDefault(); ui.selectTab(event.code === 'KeyC' ? 'character' : 'inventory'); togglePanel(); }
     if(event.code==='KeyJ'){event.preventDefault();ui.selectTab('events');togglePanel();}
+    if(event.code==='KeyB'){event.preventDefault();ui.selectTab('shops');togglePanel();}
     if (event.code === 'KeyQ') { event.preventDefault(); potion(); }
     if (event.code === 'KeyE' && state === 'playing') { event.preventDefault(); interact(); }
   });
@@ -416,6 +419,8 @@ try {
     const point = input.destination();
     if (mode === 'automation') {
       if(settings.autoEquip)for(const item of autoEquipStrongest(hero))track({type:'equip',slot:item.slot});
+      const sold=autoSellInventory(hero,settings.autoSell);
+      if(sold.count){for(let i=0;i<sold.count;i++)track({type:'sell'});ui.announce(sold.message);persist();}
       let target=chooseAutomationTarget(hero,enemies,loot);
       if(!towerArena&&!expedition&&campaign.region!=='refuge'){
         const objective=canAdvanceStage(stageRun)&&!enemies.some(e=>e.active&&e.alive&&!e.eventBoss)?portal:currentStage(stageRun)===1&&!stageRun.shrine&&stageRun.kills>=8?shrine.mesh:currentStage(stageRun)===2&&!stageRun.chest&&stageRun.champions>=2?chest:null;
