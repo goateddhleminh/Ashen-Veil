@@ -10,7 +10,7 @@ For local play, run `python -m http.server 8080` in this directory if Python is 
 
 ## Your journey
 
-Choose Warrior, Mage or Archer and begin in Ember Refuge. Press **C** and travel to the Forgotten Graveyard. Travel closes the panel and begins a three-second countdown. Each combat region has three objectives: defeat 12 enemies, reach the chest marked C on the map, and defeat its guardian. Claim the kill and chest quests before claiming the guardian reward. That reward opens the next region: Cinder Marsh, then Hollow Citadel. Claim the final quest to unlock expeditions.
+Choose Warrior, Mage or Archer and begin in Ember Refuge. Press **C** and travel to the Forgotten Graveyard. Travel closes the panel and begins a three-second countdown. Each combat region has three stages: defeat eight enemies and activate a shrine, use the portal to defeat three enemies including two champions and open the chest, then use the next portal to enter the guardian arena. The HUD tracks current-run objectives; persistent quests still reward 12 kills, the chest and the guardian. Claim the kill and chest quests before claiming the guardian reward. That reward opens the next region: Cinder Marsh, then Hollow Citadel. Claim the final quest to unlock expeditions.
 
 Return to Ember Refuge to restore life and resource and use the merchant, forge and personal stash. Death retains equipment and progress, deducts 10% of carried gold (maximum 500), and offers recovery at the refuge. Travel regenerates encounters and clears ground drops and temporary blessings. Leaving an expedition abandons its unclaimed rewards.
 
@@ -22,15 +22,15 @@ Return to Ember Refuge to restore life and resource and use the merchant, forge 
 | Click / hold left mouse | Move / steer in Manual mode |
 | Hold right mouse | Basic attack nearby enemies in Manual mode; does not chase them |
 | Click a ground label | Walk to and collect that drop |
-| 1 / 2 / 3 | Class abilities, aimed toward the mouse pointer where applicable |
+| 1 / 2 / 3 / 4 | Class abilities, aimed toward the mouse pointer where applicable |
 | Space | Dodge toward the mouse pointer |
-| E | Open a nearby chest or activate a nearby shrine in Manual mode |
-| Q | Healing potion: restores 45% maximum life; no consumption at full health |
+| E | Open a nearby chest, activate a shrine or enter an unlocked stage portal in Manual mode |
+| Q | Healing potion: restores 45% maximum life; four-second cooldown; no consumption at full health |
 | C | Character, travel, quests, talents and equipment |
 | I | Inventory, filtering, merchant, forge and stash |
 | Escape | Close a panel or pause/resume |
 
-Manual is the default: movement, basic attacks and loot collection require your input. Automation seeks enemies, attacks in range, casts ready abilities when resources and targets allow, and walks to collectible ground drops. It attempts to evade enemy and boss attack warnings; dodge cooldowns, obstacles and overlapping attacks can still leave it vulnerable. Skills and potions remain available on their keys. XP is awarded for kills in both modes; it is not a ground pickup. Switch modes at any time during play using the HUD control.
+Manual is the default: movement, basic attacks and loot collection require your input. Automation seeks enemies, attacks in range, casts ready abilities when resources and targets allow, and walks to collectible ground drops. It attempts to evade enemy and boss attack warnings; dodge cooldowns, obstacles and overlapping attacks can still leave it vulnerable. When an ultimate is ready and a target is in reach, Automation reserves enough resource to cast it before resuming other abilities. Skills and potions remain available on their keys. XP is awarded for kills in both modes; it is not a ground pickup. Switch modes at any time during play using the HUD control.
 
 Travel and expedition entry take three seconds. During the countdown the character stays idle, movement and combat are locked, and additional travel requests are ignored. Arrival clears held input. Starting or recovering a character at Ember Refuge is immediate.
 
@@ -38,19 +38,21 @@ Panels pause combat, regeneration, buffs, cooldowns and consumable use. Switchin
 
 ## Builds and loot
 
-- Three classes with distinct basic attacks and three abilities each; resource regenerates during play. Archer volley pierces a corridor, while barrage lands three timed area pulses.
-- Six talent nodes per class, three ranks each; level-ups award one talent point and two attribute points. Level cap: **30**. Excess XP at the cap is discarded.
-- Six equipment slots: weapon, armor, helm, gloves, boots and ring. Four rarities, eight attribute/affix types and six legendary properties.
+- Three classes with distinct basic attacks and four abilities each; resource regenerates during play. Warrior Cataclysm, Mage Starfall and Archer Arrowstorm are high-cost ultimates. Archer volley pierces a corridor, while barrage lands three timed area pulses.
+- Nine talent nodes per class, including three skill modifiers, with three ranks each; level-ups award one talent point and two attribute points. Level cap: **30**. Excess XP at the cap is discarded.
+- Six equipment slots: weapon, armor, helm, gloves, boots and ring. Four rarities, ten attribute/affix types (including attack speed and cooldown reduction) and six legendary properties. Bonus affixes are unique per item and roll within ±15%.
 - Inventory holds 24 items; each class has a 48-item stash. Favoriting protects items from sale and salvage. Equip comparisons, sorting and filtering help manage gear.
 - Sell gear for gold, salvage it for gems, purchase potions or magic equipment, and upgrade items up to five times using gold, gems and later diamonds. Refund talent ranks at the refuge for gold.
-- Armor reduces damage by `100 / (100 + armor)`. Equipment changes never heal. Legendary properties affect basic-hit healing, skill damage, slowing, damage reduction, resource regeneration or attack speed.
-- Shrines grant 30 seconds of doubled base resource regeneration, once per visit. Their duration pauses with gameplay.
+- Armor reduces damage by `100 / (100 + armor)`; combined mitigation is capped at 80%. Equipment changes never heal. Legendary properties affect basic-hit healing, skill damage, slowing, damage reduction, resource regeneration or attack speed.
+- Graveyard Ember shrines grant 30 seconds of doubled resource regeneration; Marsh Renewal shrines heal 50% maximum life; Citadel Ward shrines grant ten seconds of protection. Each activates once per visit.
+- Choose Normal, Nightmare or Hell at the refuge. Campaign encounters are capped to Normal levels 1–12, Nightmare 13–22 and Hell 23–30; higher tiers increase health and damage. Expedition scaling remains independent of these caps. Stage progress resets on travel.
+- Auto-salvage settings convert selected low-rarity pickups directly into gems; favorites remain protected. Bulk salvage and affix rerolls are available at the refuge.
 
-Expeditions unlock after the campaign. Defeat 20 enemies and a guardian, then claim the completion reward before leaving. Clear a tier to unlock the next (up to 100). Six modifier types rotate in pairs; three bounty types offer additional claimable currency rewards. Highest cleared tier persists; the active encounter does not.
+Expeditions unlock after the campaign. Defeat 20 enemies and a guardian, then claim the completion reward before leaving. Clear a tier to unlock the next (up to 100). Six modifier types rotate in pairs; three bounty types offer additional claimable currency rewards. Equipment drops scale with character level plus expedition tier, capped at item level 100; enemy XP scales with reward level. Highest cleared tier persists; the active encounter does not.
 
 ## Saving
 
-Characters save separately by class in browser local storage. Autosave runs during play and after important transactions, quests and death. Continue returns to the refuge. New Game asks before replacing an existing class save. Export a JSON backup from the title screen before clearing browser data or moving to another device/host. Import validates the selected class and asks before replacing its save; it does not merge items or rewards.
+Characters save separately by class in browser local storage. Autosave runs during play and after important transactions, quests and death. Continue returns to the refuge. New Game asks before replacing an existing class save. Export a JSON backup from the title screen before clearing browser data or moving to another device/host. Import detects and validates the saved class and asks before replacing its save; it does not merge items or rewards.
 
 Saves belong to the browser profile and website origin. Private browsing or blocked/full storage can prevent persistence; errors are displayed in-game. A previous valid save is retained as a fallback. Settings use a separate key. Ground loot, temporary buffs and unfinished expedition progress are not saved.
 

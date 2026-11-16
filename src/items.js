@@ -1,4 +1,4 @@
-export const AFFIXES={strength:'Mighty',intelligence:'Sage',dexterity:'Deft',vitality:'Stalwart',crit:'Keen',damage:'Savage',armor:'Warded',life:'Vigorous'};
+export const AFFIXES={strength:'Mighty',intelligence:'Sage',dexterity:'Deft',vitality:'Stalwart',crit:'Keen',damage:'Savage',armor:'Warded',life:'Vigorous',attackSpeed:'Swift',cooldownReduction:'Focused'};
 export const LEGENDARIES={
  blood:'Bloodbound: restore 3 additional life on each basic hit.',
  echo:'Echoing: active skills deal 25% more damage.',

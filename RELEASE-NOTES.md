@@ -2,6 +2,18 @@
 
 This release expands the original arena into a single-player campaign with Ember Refuge, the Forgotten Graveyard, Cinder Marsh and Hollow Citadel. Nine quests and three guardians lead to repeatable tiered expeditions.
 
+## Audit improvement update
+
+- Added fallback renderer initialization, class detection for save imports, unique randomized affixes, and level-scaled XP and expedition equipment through item level 100.
+- Replaced repeat-visit guardian shortcuts with three explicit dungeon stages: eight kills and a shrine, three kills including two champions and a chest, then the guardian. Stage portals work through E or Automation. Added a live objective tracker and accurate regional map markers.
+- Added capped Normal (1-12), Nightmare (13-22) and Hell (23-30) encounters with selection at the refuge, distinct enemy silhouettes and stats, and vampiric, molten and hasted elites.
+- Added fourth ultimate abilities with automated resource reservation, three skill-modifying talents per class, attack-speed and cooldown-reduction affixes, burn and poison, and three shrine variants. Legacy talent IDs and saved characters remain supported.
+- Added configurable rarity auto-salvage, bulk unfavorited salvage, item hover details and forge affix rerolls. Routine purchases and nonlegendary sales/salvage no longer require browser confirmations.
+- Added pooled damage numbers and ranged projectiles, critical hit-stop, collision-aware knockback and reduced-motion-aware camera shake. Potions have a four-second cooldown; combined damage mitigation is capped at 80%.
+- Added a procedural ambient drone that follows volume, mute and pause settings. Removed shared scenery material mutation and duplicate startup-error punctuation.
+
+Validation for this update is recorded in `REPORT-IMPLEMENTATION.md`; the resource measurements below describe the earlier expansion build.
+
 ## Automated combat and audio update
 
 - Automation casts ready class abilities when resource and target conditions allow, and attempts collision-aware escapes from mob and boss attack warnings. Dodging remains subject to its cooldown; overlapping hazards can still hit.

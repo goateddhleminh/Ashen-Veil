@@ -1,7 +1,7 @@
 import { CLASSES, RARITIES, slots } from './progression.js';
 import { SKILLS } from './skills.js';
 import { TALENTS, talentCost } from './talents.js';
-import { saleValue, craftCost } from './economy.js';
+import { saleValue, craftCost, rerollCost } from './economy.js';
 import { LEGENDARIES, filterItems } from './items.js';
 
 const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
@@ -101,7 +101,7 @@ export class UI {
 
   trapFocus(event) {
     const root = this.state === 'inventory' ? this.nodes['inventory-overlay'] : this.nodes.modal;
-    const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), [tabindex="0"]')]
+    const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]')]
       .filter(node => node.tabIndex >= 0 && !node.closest('[hidden]') && (node.type !== 'radio' || node.checked));
     const first = controls[0], last = controls.at(-1);
     if (!first) return;
@@ -138,8 +138,9 @@ export class UI {
     this.text('level', Math.max(1, Math.floor(finite(hero.level, 1)))); this.text('kills', Math.max(0, Math.floor(finite(kills))));
     this.text('enemy-count', Math.max(0, Math.floor(finite(enemyCount)))); this.text('xp-text', `${Math.floor(xp)} / ${Math.floor(xpNeeded)}`);
     for (const key of ['gold', 'gems', 'diamonds']) this.text(key, number(hero.currencies?.[key]));
-    this.text('potions', finite(hero.potions));
-    this.nodes['potion-button'].disabled = this.state !== 'playing' || !hero.potions || hp >= maxHp || hp <= 0;
+    this.text('potions', `${finite(hero.potions)}${hero.potionCooldown>0?` · ${hero.potionCooldown.toFixed(1)}s`:''}`);
+    this.nodes['potion-button'].title='Restores 45% maximum health · 4s cooldown';
+    this.nodes['potion-button'].disabled = this.state !== 'playing' || !hero.potions || hp >= maxHp || hp <= 0 || hero.potionCooldown > 0;
     const globe = this.nodes['health-globe'];
     if (globe.style.getPropertyValue('--health') !== healthPercent) globe.style.setProperty('--health', healthPercent);
     if (this.nodes['xp-fill'].style.width !== xpPercent) this.nodes['xp-fill'].style.width = xpPercent;
@@ -173,6 +174,9 @@ export class UI {
       command(row,'Learn','learn',node.id);command(row,`Refund · ${talentCost(hero)} gold`,'refund',node.id);talentRoot.append(row);
     }
     const shop=document.getElementById('merchant-list');shop.replaceChildren();
+    command(shop,'Salvage Unfavorited · keep Legendary gear','salvageAll');
+    shop.lastElementChild.id='salvage-unfavorited';
+    shop.lastElementChild.disabled=!hero.inventory.some(item=>!item.favorite&&item.rarity!=='legendary');
     for(const slot of ['potion',...slots])command(shop,`${slot} · ${slot==='potion'?35:120*hero.level} gold`,'buy',slot);
     const stash=document.getElementById('stash-list');stash.replaceChildren();
     for(const item of hero.stash??[])command(stash,`Retrieve ${item.name}`,'retrieve',item.id);
@@ -218,8 +222,8 @@ export class UI {
     button.addEventListener('click', () => equipped ? this.callbacks.onUnequip?.(item.slot) : this.callbacks.onEquip?.(item.id));
     card.append(button);
     if(!equipped) {
-      const cost=craftCost(item);
-      for(const [op,label] of [['favorite',item.favorite?'Unfavorite':'Favorite'],['stash','Store'],['sell',`Sell · ${saleValue(item)} gold`],['salvage','Salvage for gems'],['upgrade',`Upgrade +${(item.upgrades??0)+1} · ${cost.gold} gold / ${cost.gems} gems / ${cost.diamonds} diamonds`]]) {
+      const cost=craftCost(item), reroll=rerollCost(item);
+      for(const [op,label] of [['favorite',item.favorite?'Unfavorite':'Favorite'],['stash','Store'],['sell',`Sell · ${saleValue(item)} gold`],['salvage','Salvage for gems'],['reroll',`Reroll bonus · ${reroll.gold} gold / ${reroll.gems} gems`],['upgrade',`Upgrade +${(item.upgrades??0)+1} · ${cost.gold} gold / ${cost.gems} gems / ${cost.diamonds} diamonds`]]) {
         const action=element('button','item-action',label);action.type='button';action.onclick=()=>this.callbacks.onEconomy?.(op,item.id);card.append(action);
       }
     }
@@ -230,7 +234,7 @@ export class UI {
     const automatic=mode==='automation';
     document.getElementById('mode-label').textContent=automatic?'Automation':'Manual';
     const button=document.getElementById('mode-toggle');button.textContent=automatic?'Switch to manual':'Enable automation';button.setAttribute('aria-pressed',String(automatic));
-    document.getElementById('mode-instruction').textContent=automatic?'Pursues foes and collectible loot · 1/2/3: skills · Switch to take control':'Left click: move · Right hold: attack · Click loot: collect · E: interact';
+    document.getElementById('mode-instruction').textContent=automatic?'Pursues foes and collectible loot · 1/2/3/4: skills · Switch to take control':'Left click: move · Right hold: attack · Click loot: collect · E: interact';
   }
   setTeleport(remaining,destination) {
     const node=document.getElementById('teleport-status');

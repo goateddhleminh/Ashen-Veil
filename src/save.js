@@ -2,13 +2,13 @@ import { CLASSES, RARITIES, recomputeStats } from './progression.js';
 import { xpForLevel } from './data.js';
 import { TALENTS } from './talents.js';
 import { LEGENDARIES } from './items.js';
-import { REGIONS } from './regions.js';
+import { REGIONS, isDifficulty } from './regions.js';
 import { QUESTS } from './quests.js';
 
 const VERSION = 1;
 const slots = ['weapon', 'armor', 'helm', 'gloves', 'boots', 'ring'];
 const attributes = ['strength', 'intelligence', 'dexterity', 'vitality'];
-const modifiers = [...attributes, 'damage', 'armor', 'life', 'crit', 'lifeOnHit'];
+const modifiers = [...attributes, 'damage', 'armor', 'life', 'crit', 'lifeOnHit', 'attackSpeed', 'cooldownReduction'];
 const clone = value => JSON.parse(JSON.stringify(value));
 const integer = (value, max = 1e9) => Number.isSafeInteger(value) && value >= 0 && value <= max;
 const number = (value, max = 1e6) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max;
@@ -61,6 +61,7 @@ export function loadSave(raw, classId) {
     };
     if (!validWorld(data.world)) return fail('Invalid world progress.');
     const world=data.world;
+    if(world.difficulty!==undefined&&!isDifficulty(world.difficulty))return fail('Invalid difficulty.');
     if(world.highestTier!==undefined&&!integer(world.highestTier,100))return fail('Invalid expedition tier.');
     if(world.region!==undefined&&!Object.hasOwn(REGIONS,world.region))return fail('Unknown region.');
     if(world.unlocked!==undefined&&(!Array.isArray(world.unlocked)||!world.unlocked.every(id=>Object.hasOwn(REGIONS,id))||new Set(world.unlocked).size!==world.unlocked.length))return fail('Invalid region unlocks.');

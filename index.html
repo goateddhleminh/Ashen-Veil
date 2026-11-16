@@ -43,7 +43,7 @@
     </section>
     <nav class="hero-controls" aria-label="Hero controls">
       <div class="currencies" aria-label="Currencies"><span>Gold <b id="gold">0</b></span><span>Gems <b id="gems">0</b></span><span>Diamonds <b id="diamonds">0</b></span></div>
-      <div class="skill-controls" aria-label="Combat skills"><span>Resolve <b id="resource">100</b>/100</span><button type="button" data-skill="0">Skill 1</button><button type="button" data-skill="1">Skill 2</button><button type="button" data-skill="2">Skill 3</button><button type="button" id="dodge-button">Dodge · Space</button></div>
+      <div class="skill-controls" aria-label="Combat skills"><span>Resolve <b id="resource">100</b>/100</span><button type="button" data-skill="0">Skill 1</button><button type="button" data-skill="1">Skill 2</button><button type="button" data-skill="2">Skill 3</button><button type="button" data-skill="3">Ultimate · 4</button><button type="button" id="dodge-button">Dodge · Space</button></div>
       <div class="hero-buttons"><button id="character-button" type="button">Character <kbd>C</kbd></button><button id="inventory-button" type="button">Inventory <kbd>I</kbd></button><button id="potion-button" type="button">Potion <b id="potions">0</b> <kbd>Q</kbd></button></div>
     </nav>
   </div>
@@ -58,7 +58,7 @@
       <fieldset id="class-selection" class="class-selection"><legend>Choose your calling</legend><div id="class-options" class="class-options"></div></fieldset>
       <button id="modal-action" class="primary-button" type="button">Enter the graveyard <span aria-hidden="true">↗</span></button>
       <div id="save-controls"><button id="continue-game" type="button" disabled>Continue character</button><button id="export-save" type="button">Export save</button><button id="import-save" type="button">Import save</button><input id="save-file" type="file" accept="application/json,.json" hidden><p id="save-status" role="status"></p></div>
-      <details id="settings-panel"><summary>Settings</summary><label>Visual quality <select id="quality-setting"><option value="high">High · shadows</option><option value="low">Low · no shadows</option></select></label><label><input id="motion-setting" type="checkbox"> Reduced motion</label><label>Volume <input id="volume-setting" type="range" min="0" max="1" step="0.05"></label><label><input id="mute-setting" type="checkbox"> Mute audio</label><p id="settings-status" role="status"></p></details>
+      <details id="settings-panel"><summary>Settings</summary><label>Visual quality <select id="quality-setting"><option value="high">High · shadows</option><option value="low">Low · no shadows</option></select></label><label><input id="motion-setting" type="checkbox"> Reduced motion</label><label>Volume <input id="volume-setting" type="range" min="0" max="1" step="0.05"></label><label><input id="mute-setting" type="checkbox"> Mute audio</label><label>Auto-salvage on pickup <select id="auto-salvage-setting"><option value="none">Off · keep all gear</option><option value="common">Common</option><option value="magic">Common + Magic</option><option value="rare">Common + Magic + Rare</option></select></label><small>Favorites and Legendary gear are always kept.</small><p id="settings-status" role="status"></p></details>
       <p id="modal-hint" class="modal-hint">Manual by default · Hold right mouse to attack · E to interact.</p>
     </section>
   </div>

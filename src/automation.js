@@ -1,21 +1,41 @@
 import { WORLD } from './data.js';
 import { SKILLS, castSkill, tryDodge } from './skills.js';
 import { attackHits } from './enemy-attacks.js';
+import { modifySkill } from './talents.js';
 
 // Skill readiness stays authoritative in castSkill; movement/loot targets never set aim.
 export function castAutomationSkills(hero, enemies, combat) {
   const cast = [];
   combat.enemies = enemies;
-  for (const skill of SKILLS[hero.classId] ?? []) {
+  const skills = SKILLS[hero.classId] ?? [];
+  const ultimate = skills.at(-1);
+  const nearestLiving = () => {
     let nearest = null, distance = Infinity;
     for (const enemy of enemies) {
       if (!enemy.active || !enemy.alive) continue;
       const d = Math.hypot(enemy.position.x - hero.position.x, enemy.position.z - hero.position.z);
       if (d < distance) { nearest = enemy; distance = d; }
     }
+    return { nearest, distance };
+  };
+  const canReach = (skill, distance) => {
+    const modified = modifySkill(hero, skill);
+    return distance <= (skill.id === 'volley' ? modified.range : modified.range + modified.radius);
+  };
+  const { nearest, distance } = nearestLiving();
+  const ultimateModified = ultimate && modifySkill(hero, ultimate);
+  const ultimateReady = ultimate && (hero.skillCooldowns[ultimate.id] ?? 0) <= 0 && nearest && canReach(ultimate, distance);
+  // Fire the ultimate first whenever it is ready and has a valid target.
+  if (ultimateReady && castSkill(hero, ultimate.id, nearest.position, combat).ok) cast.push(ultimate.id);
+  const reserve = ultimateReady && (hero.skillCooldowns[ultimate.id] ?? 0) <= 0 && hero.resource < ultimateModified.cost;
+  for (const skill of skills) {
+    if (skill === ultimate) continue;
+    const modified = modifySkill(hero, skill);
     const selfBuff = ['guard', 'ward'].includes(skill.effect);
-    const reach = skill.id === 'volley' ? skill.range : skill.range + skill.radius;
-    if (!selfBuff && (!nearest || distance > reach)) continue;
+    const { nearest, distance } = nearestLiving();
+    if (!selfBuff && (!nearest || !canReach(skill, distance))) continue;
+    // Once an in-range ultimate is ready, basics must leave its full cost available.
+    if (reserve && hero.resource - modified.cost < ultimateModified.cost) continue;
     if (castSkill(hero, skill.id, nearest?.position ?? hero.position, combat).ok) cast.push(skill.id);
   }
   return cast;

@@ -1,16 +1,25 @@
 import { advanceCharge } from './charge.js';
+import { applyStatusEffect, tickStatusEffects } from './status-effects.js';
 import { face } from './entities.js';
 import { UNDEAD } from './data.js';
 import { planAttack, attackHits } from './enemy-attacks.js';
 export function updateAI(enemies, hero, world, dt, damage) {
   for (const enemy of enemies) {
     if (!enemy.active || !enemy.alive) continue;
+    tickStatusEffects(enemy,dt,damage);
+    if(!enemy.alive)continue;
+    const strike=(target,amount)=>{
+      const before=target.hp;damage(target,amount);
+      const dealt=Math.max(0,before-target.hp);
+      if(dealt>0 && enemy.eliteTrait==='vampiric')enemy.hp=Math.min(enemy.maxHp,enemy.hp+dealt*.3);
+      if(dealt>0 && enemy.eliteTrait==='molten')applyStatusEffect(target,'burn',enemy.damage*.12);
+    };
     enemy.cooldown = Math.max(0, enemy.cooldown - dt); enemy.moving = false;
     enemy.slowTime = Math.max(0,(enemy.slowTime||0)-dt);
     enemy.stunTime = Math.max(0,(enemy.stunTime||0)-dt);
     if(enemy.stunTime>0) continue;
     const stepDt = enemy.slowTime>0 ? dt*.35 : dt;
-    if(enemy.charge){advanceCharge(enemy,hero,world,stepDt,damage);continue;}
+    if(enemy.charge){advanceCharge(enemy,hero,world,stepDt,strike);continue;}
     const distance = enemy.position.distanceTo(hero.position);
     if (enemy.windup > 0) {
       enemy.windup -= dt;
@@ -18,7 +27,7 @@ export function updateAI(enemies, hero, world, dt, damage) {
       if (enemy.windup <= 0) {
         enemy.attackVisual = .28;
         if(enemy.kind==='charger'&&!enemy.bossId&&enemy.attackPlan){enemy.charge={x:enemy.attackPlan.x,z:enemy.attackPlan.z,time:.45,hit:false};}
-        else if (enemy.attackPlan && attackHits(enemy.attackPlan,hero.position) && hero.alive) damage(hero, enemy.damage*(1+(enemy.attackPlan.phase-1)*.15));
+        else if (enemy.attackPlan && attackHits(enemy.attackPlan,hero.position) && hero.alive) strike(hero, enemy.damage*(1+(enemy.attackPlan.phase-1)*.15));
         enemy.attackPlan=null;
       }
       continue;

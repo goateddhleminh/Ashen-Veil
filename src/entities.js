@@ -14,6 +14,30 @@ function part(parent, geometry, color, x, y, z, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(geometry, material(color));
   m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; parent.add(m); return m;
 }
+const ENEMY_STYLES = Object.freeze({
+ melee: { armor:0x667565, cloth:0x433f35, skin:0xb9bba1, silhouette:[1,1,1] },
+ ranged: { armor:0x385c72, cloth:0x223349, skin:0x9ebbd0, silhouette:[.82,1.12,1] },
+ charger: { armor:0x7b3f3f, cloth:0x4b2428, skin:0xc87858, silhouette:[1.2,.82,1.2] },
+ caster: { armor:0x59427d, cloth:0x281d4b, skin:0xc7a7db, silhouette:[.9,1.18,.9] },
+ boss: { armor:0xb27b32, cloth:0x542d1f, skin:0xf1c47d, silhouette:[1.5,1.4,1.5] }
+});
+export function configureEnemyAppearance(actor, kind = actor.kind, boss = Boolean(actor.bossId)) {
+ if (!actor?.enemy) return actor;
+ const style = ENEMY_STYLES[boss ? 'boss' : kind] ?? ENEMY_STYLES.melee;
+ actor.visualScale=style.silhouette;
+ actor.body.scale.set(...style.silhouette);
+ actor.weapon.visible=boss||kind==='melee'||kind==='charger';
+ actor.bow.visible=!boss&&kind==='ranged';actor.crystal.visible=!boss&&kind==='caster';
+ actor.weapon.scale.set(kind==='charger'?.42:.15,.08,boss?1.3:.8);
+ if(actor.crest){actor.crest.visible=boss||kind==='charger';actor.crest.scale.set(boss?1.1:.8,boss?1.2:.65,.5);}
+ if(actor.robe)actor.robe.visible=boss||kind==='caster';
+ const meshes=[]; actor.body.traverse(child=>{if(child.isMesh)meshes.push(child);});
+ if(meshes.length >= 2){ meshes[0].material = material(style.armor); meshes[1].material = material(style.skin); }
+ // Cloth/limb meshes receive a second palette colour while shared geometry stays pooled.
+ for(let i=2;i<meshes.length;i++) if(i%3===0) meshes[i].material=material(style.cloth);
+ actor.fill.material = material(boss ? 0xe49346 : style.skin);
+ return actor;
+}
 export function createActor(scene, enemy = false) {
   const data = enemy ? UNDEAD : WARRIOR;
   const model = new THREE.Group(), body = new THREE.Group(); model.add(body);
@@ -61,7 +85,9 @@ export function animateActor(actor, dt, camera) {
   actor.attackVisual = Math.max(0, actor.attackVisual - dt);
   actor.arm.rotation.x = actor.windup > 0 ? -1.8 : -Math.sin(actor.attackVisual / .28 * Math.PI) * 1.7;
   actor.flash = Math.max(0, actor.flash - dt);
-  actor.body.scale.setScalar(actor.flash > 0 ? 1.08 : 1);
+  const flashScale=actor.flash > 0 ? 1.08 : 1;
+  if(actor.visualScale)actor.body.scale.set(...actor.visualScale).multiplyScalar(flashScale);
+  else actor.body.scale.setScalar(flashScale);
   actor.bar.quaternion.copy(camera.quaternion);
   const fraction = Math.max(0, actor.hp / actor.maxHp);
   actor.fill.scale.x = .9 * fraction; actor.fill.position.x = -.45 * (1 - fraction);

@@ -2,7 +2,11 @@ import * as THREE from 'three';
 
 export class Engine {
   constructor(canvas, update, render) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    try {
+      this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    } catch {
+      this.renderer = new THREE.WebGLRenderer({ canvas });
+    }
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

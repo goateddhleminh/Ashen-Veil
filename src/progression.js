@@ -45,14 +45,19 @@ export function createItem(classId, level = 1, rarity, slot) {
   const chosenRarity = Object.hasOwn(RARITIES, rarity ?? '') ? rarity : (roll < .6 ? 'common' : roll < .87 ? 'magic' : roll < .98 ? 'rare' : 'legendary');
   const itemSlot = validSlot(slot || slots[Math.floor(Math.random() * slots.length)]);
   const scale = itemLevel * ({ common: 1, magic: 1.35, rare: 1.8, legendary: 2.5 }[chosenRarity]);
-  const mods = { damage: 0, armor: 0, life: 0, strength: 0, intelligence: 0, dexterity: 0, vitality: 0, crit: 0 };
+  const mods = { damage: 0, armor: 0, life: 0, strength: 0, intelligence: 0, dexterity: 0, vitality: 0, crit: 0, attackSpeed: 0, cooldownReduction: 0 };
   if (itemSlot === 'weapon') mods.damage = Math.max(1, Math.round(scale * 2.2));
   else { mods.armor = Math.max(1, Math.round(scale * 2.4)); mods.life = Math.round(scale * 3); }
   const affixCount = { common: 0, magic: 1, rare: 2, legendary: 3 }[chosenRarity];
   const affixes = Object.keys(AFFIXES);
-  for (let i = 0; i < affixCount; i++) {
-    const key = affixes[(Math.floor(Math.random() * affixes.length) + i) % affixes.length];
-    mods[key] += key === 'crit' ? Math.max(1, Math.round(scale * 0.8)) : Math.max(1, Math.round(scale * .65));
+  for (let i = affixes.length - 1; i > 0 && affixCount > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [affixes[i], affixes[j]] = [affixes[j], affixes[i]];
+  }
+  for (const key of affixes.slice(0, affixCount)) {
+    const variance = .85 + Math.random() * .3;
+    const multiplier = ['attackSpeed', 'cooldownReduction'].includes(key) ? .08 : key === 'crit' ? .8 : .65;
+    mods[key] = (mods[key] ?? 0) + Math.max(1, Math.round(scale * multiplier * variance));
   }
   if (chosenRarity === 'legendary') mods.lifeOnHit = Math.max(2, Math.round(scale * .6));
   const label = itemSlot === 'weapon' ? ({ warrior: 'Blade', mage: 'Staff', archer: 'Bow' }[classKey] || 'Blade') : ({armor:'Mail',helm:'Crown',gloves:'Grips',boots:'Treads',ring:'Signet'}[itemSlot]);
@@ -63,10 +68,11 @@ export function recomputeStats(hero) {
   if (!hero || typeof hero !== 'object') return hero;
   const base = hero.baseStats || { strength: 0, intelligence: 0, dexterity: 0, vitality: 0 };
   const stats = { strength: n(base.strength), intelligence: n(base.intelligence), dexterity: n(base.dexterity), vitality: n(base.vitality) };
-  let damage = 0, armor = 0, life = 0, crit = 0, lifeOnHit = 0;
+  let damage = 0, armor = 0, life = 0, crit = 0, lifeOnHit = 0, attackSpeed = 0, cooldownReduction = 0;
   for (const item of Object.values(hero.equipment || {})) {
     if (!item?.mods) continue;
     damage += n(item.mods.damage); armor += n(item.mods.armor); life += n(item.mods.life); crit += n(item.mods.crit); lifeOnHit += n(item.mods.lifeOnHit);
+    attackSpeed += n(item.mods.attackSpeed); cooldownReduction += n(item.mods.cooldownReduction);
     for (const key of Object.keys(stats)) stats[key] += n(item.mods[key]);
   }
   const bonuses={damage:0,life:0,armor:0,crit:0,lifeOnHit:0,speed:0};
@@ -82,7 +88,9 @@ export function recomputeStats(hero) {
   hero.crit = Math.min(100, Math.max(0, 5 + stats.dexterity * .5 + crit));
   hero.speed = Math.max(0, cls.speed + stats.dexterity * .03 + bonuses.speed);
   hero.range = cls.range;
-  hero.attackSeconds = cls.attackSeconds * (hero.legendaryEffects.includes('haste')?.85:1);
+  hero.attackSpeed = Math.min(50, Math.max(0, attackSpeed));
+  hero.cooldownReduction = Math.min(50, Math.max(0, cooldownReduction));
+  hero.attackSeconds = cls.attackSeconds * (hero.legendaryEffects.includes('haste')?.85:1) * (1 - hero.attackSpeed / 100);
   hero.hp = Math.max(0, Math.min(n(hero.hp), hero.maxHp));
   return hero;
 }
@@ -93,7 +101,7 @@ export function initializeProgression(hero, classId) {
   hero.equipment = { weapon: createItem(hero.classId, 1, 'common', 'weapon'), armor: createItem(hero.classId, 1, 'common', 'armor') };
   hero.stash = []; hero.talents = {}; hero.talentPoints = 0;
   for(const slot of slots) hero.equipment[slot] ??= null;
-  hero.inventory = []; hero.currencies = { gold: 0, gems: 0, diamonds: 0 }; hero.potions = 3; hero.statPoints = 0;
+  hero.inventory = []; hero.currencies = { gold: 0, gems: 0, diamonds: 0 }; hero.potions = 3; hero.potionCooldown = 0; hero.statPoints = 0;
   hero.hp = 1; recomputeStats(hero); hero.hp = hero.maxHp; hero.alive = true; return hero;
 }
 
@@ -119,8 +127,13 @@ export function allocateStat(hero, key) {
   hero.baseStats[key] = n(hero.baseStats[key]) + 1; hero.statPoints--; recomputeStats(hero); return `Increased ${key}.`;
 }
 
+export function tickPotionCooldown(hero, dt) {
+  hero.potionCooldown = Math.max(0, n(hero.potionCooldown) - Math.max(0, n(dt)));
+  if(hero.potionCooldown < 1e-9) hero.potionCooldown=0;
+}
 export function usePotion(hero) {
   if (!hero || hero.alive === false || n(hero.hp) <= 0 || n(hero.hp) >= n(hero.maxHp) || n(hero.potions) < 1) return 'Potion could not be used.';
-  const healed = Math.min(hero.maxHp - hero.hp, hero.maxHp * .45); hero.hp += healed; hero.potions--; return `Restored ${Math.round(healed)} health.`;
+  if(n(hero.potionCooldown)>0) return `Potion ready in ${hero.potionCooldown.toFixed(1)}s.`;
+  const healed = Math.min(hero.maxHp - hero.hp, hero.maxHp * .45); hero.hp += healed; hero.potions--; hero.potionCooldown=4; return `Restored ${Math.round(healed)} health.`;
 }
 

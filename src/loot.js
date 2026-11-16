@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { createItem, RARITIES } from './progression.js';
+import { shouldAutoSalvage, salvageValue } from './economy.js';
 
 const COLORS = { gold: '#e7bf61', gems: '#64cbbd', diamonds: '#b3d9ff', potion: '#ef7474' };
 export class Loot {
-  constructor(scene, onNotice) {
-    this.onNotice = onNotice; this.selected = null; this.time = 0;
+  constructor(scene, onNotice, settings = {}) {
+    this.settings = settings; this.onNotice = onNotice; this.selected = null; this.time = 0;
     this.root = document.createElement('div'); this.root.id = 'loot-labels';
     this.root.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;overflow:hidden';
     document.body.append(this.root);
@@ -24,7 +25,7 @@ export class Loot {
     });
     this.projected = new THREE.Vector3();
   }
-  spawn(enemy, hero) {
+  spawn(enemy, hero, dropLevel = hero.level) {
     // One weighted drop per kill. Veteran enemies favor rarer equipment.
     const r = Math.random(), rank = enemy.rank || 0;
     let kind = r < .42 ? 'gold' : r < .54 ? 'gems' : r < .58 ? 'diamonds' : r < .72 ? 'potion' : 'gear';
@@ -34,17 +35,19 @@ export class Loot {
     drop.kind = kind; drop.amount = kind === 'gold' ? 6 + Math.floor(Math.random() * 9) + hero.level * 2 + rank * 8 : 1;
     const roll = Math.random();
     const rarity = roll < .015 + rank * .035 ? 'legendary' : roll < .12 + rank * .14 ? 'rare' : roll < .42 + rank * .15 ? 'magic' : 'common';
-    drop.item = kind === 'gear' ? createItem(hero.classId, hero.level, rarity) : null;
+    drop.item = kind === 'gear' ? createItem(hero.classId, dropLevel, rarity) : null;
     const color = drop.item ? RARITIES[drop.item.rarity].color : COLORS[kind];
     drop.position.copy(enemy.position); drop.position.y = .35;
     drop.mesh.position.copy(drop.position); drop.beam.position.copy(drop.position); drop.beam.position.y = 1;
     drop.mesh.material.color.set(color); drop.beam.material.color.set(color);
     drop.label.style.color = typeof color === 'number' ? `#${color.toString(16).padStart(6,'0')}` : color;
     drop.label.textContent = drop.item ? drop.item.name : `${drop.amount} ${kind === 'potion' ? 'Healing potion' : kind}`;
+    drop.label.title = drop.item ? `${drop.item.name} · Level ${drop.item.level} · ${drop.item.slot}
+${Object.entries(drop.item.mods).filter(([,v])=>v).map(([k,v])=>`+${v} ${k}`).join(' · ')}` : drop.label.textContent;
     drop.active = true; drop.mesh.visible = drop.beam.visible = true;
   }
   canCollect(hero, drop) {
-    return drop.active && (drop.kind !== 'gear' || hero.inventory.length < 24) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
+    return drop.active && (drop.kind !== 'gear' || shouldAutoSalvage(drop.item,this.settings.autoSalvage) || hero.inventory.length < 24) && (drop.kind !== 'potion' || hero.potions + drop.amount <= 9999);
   }
   update(hero, dt) {
     this.time += dt;
@@ -53,6 +56,10 @@ export class Loot {
     hero.target.set(drop.position.x, 0, drop.position.z);
     if (hero.position.distanceTo(hero.target) > 1.6) return;
     if (drop.kind === 'gear') {
+      if (shouldAutoSalvage(drop.item,this.settings.autoSalvage)) {
+        const gems=salvageValue(drop.item);hero.currencies.gems+=gems;
+        this.onCollect?.();this.onNotice(`Auto-salvaged ${drop.item.name} (+${gems} gems)`);this.remove(drop);return;
+      }
       if (hero.inventory.length >= 24) { this.onNotice('Inventory full · equip an item or leave this drop'); this.selected = null; return; }
       hero.inventory.push(drop.item);
     } else if (drop.kind === 'potion') {
