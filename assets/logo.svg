@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Radial Gradient -->
+    <radialGradient id="logoBg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#22272c"/>
+      <stop offset="60%" stop-color="#121518"/>
+      <stop offset="100%" stop-color="#08090b"/>
+    </radialGradient>
+
+    <!-- Antique Gold Bevel Gradients -->
+    <linearGradient id="logoGoldBevel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff2c6"/>
+      <stop offset="25%" stop-color="#d4af37"/>
+      <stop offset="50%" stop-color="#8a6928"/>
+      <stop offset="75%" stop-color="#f5df97"/>
+      <stop offset="100%" stop-color="#4e3b14"/>
+    </linearGradient>
+
+    <linearGradient id="logoGoldInner" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5a4418"/>
+      <stop offset="50%" stop-color="#d8b668"/>
+      <stop offset="100%" stop-color="#fff5cf"/>
+    </linearGradient>
+
+    <!-- Ember Flame Gradients -->
+    <linearGradient id="logoFlameOuter" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#851010"/>
+      <stop offset="35%" stop-color="#d83a12"/>
+      <stop offset="70%" stop-color="#ff7a2f"/>
+      <stop offset="100%" stop-color="#ffa62b"/>
+    </linearGradient>
+
+    <linearGradient id="logoFlameCore" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#e24510"/>
+      <stop offset="40%" stop-color="#ff9a2b"/>
+      <stop offset="80%" stop-color="#ffd54f"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+
+    <!-- Ember Glow Filters -->
+    <filter id="logoAmbientGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="24" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <filter id="logoFlameGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16" result="blur1"/>
+      <feGaussianBlur stdDeviation="6" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient Backlight -->
+  <circle cx="256" cy="256" r="210" fill="#ff5722" opacity="0.15" filter="url(#logoAmbientGlow)"/>
+
+  <!-- Main Gothic Diamond-Shield Crest -->
+  <path d="M256,24
+           C288,64 384,92 428,128
+           C452,148 460,196 460,240
+           C460,348 370,436 256,492
+           C142,436 52,348 52,240
+           C52,196 60,148 84,128
+           C128,92 224,64 256,24 Z"
+        fill="url(#logoBg)"
+        stroke="url(#logoGoldBevel)"
+        stroke-width="16"
+        stroke-linejoin="round"/>
+
+  <!-- Inner Gold Inset Hairline -->
+  <path d="M256,52
+           C284,88 370,112 410,144
+           C430,162 438,204 438,244
+           C438,336 358,416 256,466
+           C154,416 74,336 74,244
+           C74,204 82,162 102,144
+           C142,112 228,88 256,52 Z"
+        fill="none"
+        stroke="url(#logoGoldInner)"
+        stroke-width="4.5"
+        opacity="0.8"/>
+
+  <!-- Corner Filigree Gold Studs -->
+  <circle cx="256" cy="52" r="7" fill="#fff5cf" stroke="#8a6928" stroke-width="2"/>
+  <circle cx="410" cy="144" r="6" fill="#fff5cf" stroke="#8a6928" stroke-width="2"/>
+  <circle cx="102" cy="144" r="6" fill="#fff5cf" stroke="#8a6928" stroke-width="2"/>
+  <circle cx="438" cy="244" r="6" fill="#fff5cf" stroke="#8a6928" stroke-width="2"/>
+  <circle cx="74" cy="244" r="6" fill="#fff5cf" stroke="#8a6928" stroke-width="2"/>
+  <circle cx="256" cy="466" r="7" fill="#fff5cf" stroke="#8a6928" stroke-width="2"/>
+
+  <!-- Inner Ambient Heat Well -->
+  <ellipse cx="256" cy="290" rx="110" ry="120" fill="#e64a19" opacity="0.22" filter="url(#logoAmbientGlow)"/>
+
+  <!-- The Great Sacred Ember Flame -->
+  <!-- Outer Body -->
+  <path d="M256,110
+           C275,170 345,210 345,285
+           C345,348 298,392 256,402
+           C214,392 167,348 167,285
+           C167,222 225,185 232,150
+           C235,185 260,205 272,225
+           C286,248 284,275 270,292
+           C262,270 255,255 242,240
+           C235,215 250,150 256,110 Z"
+        fill="url(#logoFlameOuter)"
+        filter="url(#logoFlameGlow)"/>
+
+  <!-- Core Radiant Flame -->
+  <path d="M256,170
+           C270,215 310,245 310,300
+           C310,344 280,374 256,382
+           C232,374 202,344 202,300
+           C202,255 240,225 245,195
+           C250,215 264,235 268,255
+           C272,272 266,288 256,298
+           C252,284 250,274 245,264
+           C242,244 252,200 256,170 Z"
+        fill="url(#logoFlameCore)"/>
+
+  <!-- White-Hot Soul Center Spark -->
+  <path d="M256,230
+           C264,258 282,278 282,310
+           C282,336 268,354 256,358
+           C244,354 230,336 230,310
+           C230,282 248,262 252,245
+           C254,256 260,268 260,280
+           C258,290 252,298 248,302
+           C248,290 252,270 256,230 Z"
+        fill="#ffffff" opacity="0.95"/>
+
+  <!-- Engraved Apex Star (Sacred Diamond) -->
+  <polygon points="256,66 264,86 284,86 268,98 274,118 256,106 238,118 244,98 228,86 248,86"
+           fill="#ffffff" stroke="#c9a45c" stroke-width="2"/>
+
+  <!-- Floating Ember Spark Particles -->
+  <circle cx="184" cy="184" r="4.5" fill="#ffd32a" opacity="0.85" filter="url(#logoFlameGlow)"/>
+  <circle cx="330" cy="172" r="5" fill="#ff9f43" opacity="0.9" filter="url(#logoFlameGlow)"/>
+  <circle cx="352" cy="245" r="3.5" fill="#ff5722" opacity="0.75"/>
+  <circle cx="158" cy="255" r="3.5" fill="#ffd32a" opacity="0.8"/>
+  <circle cx="212" cy="128" r="2.5" fill="#ffffff" opacity="0.95"/>
+  <circle cx="304" cy="122" r="2.5" fill="#ffd32a" opacity="0.95"/>
+</svg>

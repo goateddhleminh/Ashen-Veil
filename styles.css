@@ -419,6 +419,37 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   margin-bottom: 24px;
 }
 
+.title-crest-badge {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.title-crest-img {
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 0 14px rgba(255, 122, 47, 0.45)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.8));
+  animation: crestBreathe 4s ease-in-out infinite alternate;
+}
+
+@keyframes crestBreathe {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(255, 122, 47, 0.35)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.8));
+  }
+  100% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 18px rgba(255, 122, 47, 0.6)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.9));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-crest-img {
+    animation: none;
+  }
+}
+
 .title-tagline {
   font-size: 11px;
   letter-spacing: 0.3em;

@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Background Radial Gradient -->
+    <radialGradient id="tabBg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#1c2024"/>
+      <stop offset="70%" stop-color="#101316"/>
+      <stop offset="100%" stop-color="#060809"/>
+    </radialGradient>
+
+    <!-- Beveled Antique Gold Frame Gradient -->
+    <linearGradient id="goldBevel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff0be"/>
+      <stop offset="30%" stop-color="#d4af37"/>
+      <stop offset="60%" stop-color="#8a6928"/>
+      <stop offset="85%" stop-color="#f5df97"/>
+      <stop offset="100%" stop-color="#4e3b14"/>
+    </linearGradient>
+
+    <!-- Outer Ember Glow -->
+    <linearGradient id="flameOuter" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#991515"/>
+      <stop offset="35%" stop-color="#d83a12"/>
+      <stop offset="70%" stop-color="#ff7a2f"/>
+      <stop offset="100%" stop-color="#ffa62b"/>
+    </linearGradient>
+
+    <!-- Inner Core Flame -->
+    <linearGradient id="flameCore" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#e24510"/>
+      <stop offset="40%" stop-color="#ff9a2b"/>
+      <stop offset="80%" stop-color="#ffd54f"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+
+    <!-- Drop Shadow / Glow Filter -->
+    <filter id="tabGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#ff6610" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Dark Fantasy Shield Silhouette -->
+  <!-- Outer Rim Stroke -->
+  <path d="M32,3
+           C36,8 48,11 53,16
+           C57,20 58,26 58,32
+           C58,45 46,55 32,61
+           C18,55 6,45 6,32
+           C6,26 7,20 11,16
+           C16,11 28,8 32,3 Z"
+        fill="url(#tabBg)"
+        stroke="url(#goldBevel)"
+        stroke-width="2.5"
+        stroke-linejoin="round"
+        filter="url(#tabGlow)"/>
+
+  <!-- Inner Gold Inset Hairline -->
+  <path d="M32,6.5
+           C35.5,10.5 45.5,13.5 50,17.5
+           C53,21 54,26 54,31.5
+           C54,42.5 43.5,51.5 32,56.5
+           C20.5,51.5 10,42.5 10,31.5
+           C10,26 11,21 14,17.5
+           C18.5,13.5 28.5,10.5 32,6.5 Z"
+        fill="none"
+        stroke="#f5e0a0"
+        stroke-width="0.8"
+        opacity="0.6"/>
+
+  <!-- Corner Gold Accent Studs -->
+  <circle cx="32" cy="7" r="1.2" fill="#fff5d0"/>
+  <circle cx="50" cy="18" r="1" fill="#fff5d0"/>
+  <circle cx="14" cy="18" r="1" fill="#fff5d0"/>
+  <circle cx="32" cy="56" r="1.2" fill="#fff5d0"/>
+
+  <!-- Rising Sacred Ember Flame (Ashen Veil Brandmark) -->
+  <!-- Outer Ember Body -->
+  <path d="M32,14
+           C34,22 43,27 43,37
+           C43,45 37,50 32,51
+           C27,50 21,45 21,37
+           C21,29 28,24 29,20
+           C29.5,23.5 32.5,26.5 34,29
+           C35.5,31.5 35,34.5 33.5,36.5
+           C32.5,34 31.8,32 30.5,30
+           C29.5,27 31.2,20 32,14 Z"
+        fill="url(#flameOuter)"/>
+
+  <!-- Core Radiant Flame -->
+  <path d="M32,22
+           C34,27 38.5,31 38.5,38
+           C38.5,43 35,47 32,48
+           C29,47 25.5,43 25.5,38
+           C25.5,32.5 30,29 30.8,25.5
+           C31.5,28 33,30 33.8,32
+           C34.2,34 33.5,36 32,37
+           C31.5,35 31,33.5 30.5,32
+           C30,29.5 31.5,25 32,22 Z"
+        fill="url(#flameCore)"/>
+
+  <!-- White Spark Center Point -->
+  <ellipse cx="32" cy="38" rx="2" ry="4" fill="#ffffff" opacity="0.95"/>
+
+  <!-- Star of Ember (Apex Diamond) -->
+  <polygon points="32,8 33.3,10.7 36,11.5 33.5,13 33.8,15.8 32,14.3 30.2,15.8 30.5,13 28,11.5 30.7,10.7"
+           fill="#ffffff" stroke="#c9a45c" stroke-width="0.4"/>
+</svg>
