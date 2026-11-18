@@ -80,6 +80,13 @@ Saves belong to the browser profile and website origin. Private browsing or bloc
 
 The simulation uses a fixed 60 Hz step, 16 pooled enemies, 32 pooled ground drops and pooled combat effects. Region scenery is prebuilt and switched on travel. Manual movement slides along obstacles; Automation uses bounded pathfinding around props. `window.arpg.snapshot()` exposes read-only diagnostic values.
 
+## Dark-Fantasy AAA UI/UX Redesign
+
+- **Title Screen**: Ambient live scene with drifting embers, engraved Cinzel/Inter typography, arched illustrated class cards with glowing stat bars and primary attribute chips, and glowing gold CTA.
+- **In-Game HUD**: Compact corner-anchored design: animated liquid health orb with low-life pulse, per-class colored resource orb, action hotbar with 4 painterly skill icons, keycap badges, and radial clockwise cooldown sweeps, minimap compass, and compact currency counters.
+- **Character & Inventory**: Multi-tab modal (`Character`, `Inventory`, `Shops`, `Events`, `Journey`) with full paper-doll equipment layout, rarity glow borders, primary attribute cards, combat stats, talent specialization cards, and integrated world campaign travel.
+- **Visuals**: High-resolution 1920×1080 screenshots located in `docs/screenshots/`.
+
 ## Verification and limitations
 
 Optional developer tests require Node and Python Playwright; those tools are not part of the playable distribution. Run `node tests/<name>_check.mjs` for each pure suite. Browser scripts run from the project root and use port 8087, so run them sequentially. Their Chromium executable and optional local tooling paths may need adjusting on another machine.

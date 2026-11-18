@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none">
+      <polygon points="12,2 21,9 12,22 3,9" fill="url(#diaGrad)" stroke="#a5f3fc" stroke-width="1.2"/>
+      <polygon points="12,5 17,9 12,17 7,9" fill="#cffafe" fill-opacity="0.5"/>
+      <defs>
+        <linearGradient id="diaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#67e8f9"/>
+          <stop offset="100%" stop-color="#0e7490"/>
+        </linearGradient>
+      </defs>
+    </svg>

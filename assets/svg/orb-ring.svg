@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140" width="140" height="140" fill="none">
+      <circle cx="70" cy="70" r="66" stroke="#c9a45c" stroke-width="2.5"/>
+      <circle cx="70" cy="70" r="62" stroke="#6f5a31" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <circle cx="70" cy="70" r="58" stroke="#f0d28a" stroke-width="0.8" opacity="0.6"/>
+      <!-- Cardinal filigree accents -->
+      <polygon points="70,0 74,6 70,12 66,6" fill="#f0d28a"/>
+      <polygon points="70,140 74,134 70,128 66,134" fill="#f0d28a"/>
+      <polygon points="0,70 6,74 12,70 6,66" fill="#f0d28a"/>
+      <polygon points="140,70 134,74 128,70 134,66" fill="#f0d28a"/>
+    </svg>

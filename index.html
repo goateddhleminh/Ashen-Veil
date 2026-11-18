@@ -3,88 +3,644 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0d0d">
+  <meta name="theme-color" content="#0b0d0e">
   <link rel="icon" href="data:,">
-  <title>Ashen Veil — The Forgotten Graveyard</title>
+  <title>Ashen Veil — A Light Where None Remains</title>
+
+  <!-- Typography: Cinzel for Display, Inter for Body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Cinzel+Decorative:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="./styles.css">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
   </script>
 </head>
 <body data-state="ready">
+  <!-- 3D Battlefield Canvas -->
   <canvas id="game" aria-label="Ashen Veil graveyard battlefield" tabindex="0"></canvas>
+
+  <!-- Atmospheric Vignette & Particle Canvas -->
   <div class="vignette" aria-hidden="true"></div>
-  <!-- HUD is transparent to world input; only real controls receive pointer events. -->
+  <canvas id="ember-canvas" aria-hidden="true"></canvas>
+
+  <!-- =======================================================================
+       IN-GAME HUD
+       ======================================================================= -->
   <div id="hud">
-    <header class="zone">
-      <span class="eyebrow">ASHEN VEIL <span class="zone-separator">/</span> THE LAST EMBERS</span>
-      <h1>The Forgotten Graveyard</h1>
-      <p><span class="tiny-diamond" aria-hidden="true"></span> The dead do not rest here.</p>
-    </header>
-    <div class="encounter">
-      <div class="counter"><span class="eyebrow">Slain</span><strong id="kills">0</strong></div>
-      <div class="counter"><span class="eyebrow">Remaining</span><strong id="enemy-count">0</strong></div>
-      <button id="pause-button" class="pause-button" type="button" aria-label="Pause game" title="Pause game" disabled><span aria-hidden="true">Ⅱ</span></button>
-    </div>
-    <aside id="region-map"><canvas id="map-canvas" width="144" height="144" aria-label="Region map: white diamond is you, red dots are enemies"></canvas><small>C Chest · S Shrine · B Guardian</small><small>C key: travel & quests</small></aside>
-    <aside id="first-steps-tracker" aria-label="First Steps progress" hidden></aside><div id="blood-moon-banner" role="status" hidden></div>
-    <div id="announcement" class="announcement" role="status" aria-live="polite"></div>
-    <section class="vitality" aria-label="Hero health">
-      <div id="health-globe" class="health-globe" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
-        <div class="health-liquid"></div><div class="globe-shine"></div>
-        <div class="health-number"><strong id="health-current">100</strong><span id="health-max">/ 100</span></div>
+    <!-- Top-Left: Zone Location Banner -->
+    <header class="zone-banner zone">
+      <span class="zone-breadcrumb eyebrow">ASHEN VEIL <span class="zone-separator">/</span> THE LAST EMBERS</span>
+      <div class="zone-title-row">
+        <h1 class="zone-title" id="zone-title-text">The Forgotten Graveyard</h1>
+        <span class="difficulty-chip" id="hud-difficulty-chip">Normal</span>
       </div>
-      <div class="vitality-copy"><span class="eyebrow">Vitality</span><span class="hero-name">The Wanderer</span><span class="hero-level">Level <b id="level">1</b></span></div>
+      <p class="zone-subtitle"><span class="tiny-diamond" aria-hidden="true">◆</span> The dead do not rest here.</p>
+    </header>
+
+    <!-- Top-Center: Cinematic Zone Entry Banner -->
+    <div id="zone-entry-banner" class="zone-entry-banner" role="status" aria-live="polite">
+      <span class="eyebrow">Entering</span>
+      <h2 id="entry-banner-title">The Forgotten Graveyard</h2>
+    </div>
+
+    <!-- Top-Right: Minimap, Tracker & Counters -->
+    <aside class="top-right-dock">
+      <!-- Minimap with Compass Marker -->
+      <div class="minimap-wrapper" id="region-map">
+        <span class="minimap-compass" aria-hidden="true">N</span>
+        <canvas id="map-canvas" class="minimap-canvas" width="144" height="144" aria-label="Region map: white diamond is you, red dots are enemies"></canvas>
+      </div>
+
+      <!-- Encounter Counters & Pause Button -->
+      <div class="top-right-bar">
+        <div class="encounter-chip">
+          <span>Slain</span>
+          <strong id="kills" class="tabular">0</strong>
+        </div>
+        <div class="encounter-chip">
+          <span>Remaining</span>
+          <strong id="enemy-count" class="tabular">0</strong>
+        </div>
+        <button id="pause-button" class="btn-icon" type="button" aria-label="Pause game" title="Pause game [Esc]" disabled>
+          <img src="./assets/svg/menu-pause.svg" alt="Pause"/>
+        </button>
+      </div>
+
+      <!-- Currency Bar -->
+      <div class="currencies currencies-strip hud-wallet" aria-label="Wallet">
+        <span class="currency-chip" title="Gold coins"><img src="./assets/svg/currency-gold.svg" alt="Gold"/> <b id="gold">0</b></span>
+        <span class="currency-chip" title="Gems"><img src="./assets/svg/currency-gems.svg" alt="Gems"/> <b id="gems">0</b></span>
+        <span class="currency-chip" title="Diamonds"><img src="./assets/svg/currency-diamonds.svg" alt="Diamonds"/> <b id="diamonds">0</b></span>
+        <span class="currency-chip" title="Dust"><img src="./assets/svg/currency-dust.svg" alt="Dust"/> <b id="dust">0</b></span>
+        <span class="currency-chip" title="Shards"><img src="./assets/svg/currency-shards.svg" alt="Shards"/> <b id="shards">0</b></span>
+      </div>
+
+      <!-- Quest Tracker Card -->
+      <div class="quest-tracker-card" id="hud-quest-tracker">
+        <div class="quest-tracker-header">
+          <span>QUESTS</span>
+        </div>
+        <div id="first-steps-tracker" aria-label="First Steps progress"></div>
+        <div id="blood-moon-banner" role="status" hidden></div>
+      </div>
+    </aside>
+
+    <!-- Floating Announcement Banner -->
+    <div id="announcement" class="announcement" role="status" aria-live="polite"></div>
+
+    <!-- Bottom-Left: Vitality Orb & Hero Info -->
+    <section class="vitality vitality-group" aria-label="Hero health">
+      <div id="health-globe" class="orb-container health-globe" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+        <img class="orb-ring" src="./assets/svg/orb-ring.svg" alt="" aria-hidden="true"/>
+        <div class="orb-sphere">
+          <div class="health-liquid liquid-wave"></div>
+          <div class="orb-shine"></div>
+        </div>
+        <div class="orb-readout health-number">
+          <strong id="health-current" class="tabular">100</strong>
+          <span id="health-max">/ 100</span>
+        </div>
+      </div>
+      <div class="vitality-meta">
+        <span class="eyebrow">Vitality</span>
+        <span class="vitality-hero-name hero-name">The Wanderer</span>
+        <span class="vitality-class-title hero-class-title" id="hero-class-label">Warrior</span>
+        <div class="level-badge-pill hero-level">
+          <img src="./assets/svg/level-badge.svg" alt="" width="16" height="16"/>
+          <span>Level <b id="level">1</b></span>
+        </div>
+      </div>
     </section>
-    <section class="combat-hud" aria-label="Combat and experience">
-      <div class="combat-mode"><span class="blade-icon" aria-hidden="true">†</span><div><span class="eyebrow">Steel answers the darkness</span><strong id="mode-label">Manual</strong><button id="mode-toggle" type="button" aria-pressed="false">Enable automation</button><button id="background-toggle" class="background-toggle" type="button" aria-pressed="false" disabled>Run while hidden</button></div></div>
-      <p class="move-instruction" id="mode-instruction">Left click: move · Right hold: attack · Click loot: collect · E: interact</p>
-      <div class="xp-label"><span>Experience</span><span id="xp-text">0 / 100</span></div>
-      <div id="xp-meter" class="xp-track" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-fill"></div></div>
+
+    <!-- Bottom-Center: Action Bar (XP, Skills, Resource Orb) -->
+    <section class="action-bar-container combat-hud" aria-label="Combat and experience">
+      <!-- Automation Pill Toggle -->
+      <div class="automation-switch-row combat-mode">
+        <span class="eyebrow" id="mode-instruction-eyebrow">Steel answers the darkness</span>
+        <strong id="mode-label" hidden>Manual</strong>
+        <button id="mode-toggle" class="mode-pill-toggle" type="button" aria-pressed="false">
+          <span class="auto-dot"></span>
+          <span>AUTO-PLAY</span>
+        </button>
+        <button id="background-toggle" class="mode-pill-toggle" type="button" aria-pressed="false" disabled>
+          <span>Run in background</span>
+        </button>
+      </div>
+
+      <!-- Movement Instruction Toast / Hint -->
+      <p class="move-instruction" id="mode-instruction" hidden>Left click: move · Right hold: attack · E: interact</p>
+
+      <!-- XP Bar -->
+      <div class="xp-container">
+        <div id="xp-meter" class="xp-track" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="xp-fill" class="xp-fill"></div>
+        </div>
+        <div class="xp-text xp-label"><span id="xp-text">0 / 100 XP</span></div>
+      </div>
+
+      <!-- Skill Slots Row with Dodge, Potion & Resource Orb -->
+      <div class="skills-slots-row">
+        <!-- 4 Active Class Skills -->
+        <button type="button" data-skill="0" class="skill-slot" title="Skill 1">
+          <img id="skill-icon-0" src="./assets/icons/skills/warrior-sweep.png" alt="Skill 1"/>
+          <kbd class="keycap skill-keycap">1</kbd>
+          <div class="cooldown-sweep" hidden></div>
+          <span class="cooldown-seconds" hidden></span>
+          <span class="skill-cost-badge">20</span>
+        </button>
+
+        <button type="button" data-skill="1" class="skill-slot" title="Skill 2">
+          <img id="skill-icon-1" src="./assets/icons/skills/warrior-slam.png" alt="Skill 2"/>
+          <kbd class="keycap skill-keycap">2</kbd>
+          <div class="cooldown-sweep" hidden></div>
+          <span class="cooldown-seconds" hidden></span>
+          <span class="skill-cost-badge">35</span>
+        </button>
+
+        <button type="button" data-skill="2" class="skill-slot" title="Skill 3">
+          <img id="skill-icon-2" src="./assets/icons/skills/warrior-shout.png" alt="Skill 3"/>
+          <kbd class="keycap skill-keycap">3</kbd>
+          <div class="cooldown-sweep" hidden></div>
+          <span class="cooldown-seconds" hidden></span>
+          <span class="skill-cost-badge">25</span>
+        </button>
+
+        <button type="button" data-skill="3" class="skill-slot" title="Ultimate 4">
+          <img id="skill-icon-3" src="./assets/icons/skills/warrior-cataclysm.png" alt="Ultimate 4"/>
+          <kbd class="keycap skill-keycap">4</kbd>
+          <div class="cooldown-sweep" hidden></div>
+          <span class="cooldown-seconds" hidden></span>
+          <span class="skill-cost-badge">70</span>
+        </button>
+
+        <!-- Dodge Button -->
+        <button type="button" id="dodge-button" class="skill-slot" title="Dodge [Space]">
+          <img src="./assets/icons/skills/general-dodge.png" alt="Dodge"/>
+          <kbd class="keycap skill-keycap">SPC</kbd>
+          <div class="cooldown-sweep" hidden></div>
+          <span class="cooldown-seconds" hidden></span>
+        </button>
+
+        <!-- Potion Button -->
+        <button id="potion-button" type="button" class="skill-slot" title="Potion [Q]">
+          <img src="./assets/icons/skills/general-potion.png" alt="Health Potion"/>
+          <kbd class="keycap skill-keycap">Q</kbd>
+          <span id="potions" class="skill-cost-badge">4</span>
+          <div class="cooldown-sweep" hidden></div>
+        </button>
+
+        <!-- Resource Orb (Resolve / Mana / Energy) -->
+        <div class="resource-orb-wrap">
+          <div class="resource-sphere">
+            <div id="resource-liquid" class="resource-liquid"></div>
+            <div class="orb-shine"></div>
+          </div>
+          <div class="orb-readout">
+            <strong id="resource" class="tabular">100</strong>
+            <span>Resolve</span>
+          </div>
+        </div>
+      </div>
     </section>
-    <nav class="hero-controls" aria-label="Hero controls">
-      <div class="currencies" aria-label="Wallet"><span>Gold coins <b id="gold">0</b></span><span>Gems <b id="gems">0</b></span><span>Diamonds <b id="diamonds">0</b></span><span>Dust <b id="dust">0</b></span><span>Shards <b id="shards">0</b></span></div>
-      <div class="skill-controls" aria-label="Combat skills"><span>Resolve <b id="resource">100</b>/100</span><button type="button" data-skill="0">Skill 1</button><button type="button" data-skill="1">Skill 2</button><button type="button" data-skill="2">Skill 3</button><button type="button" data-skill="3">Ultimate · 4</button><button type="button" id="dodge-button">Dodge · Space</button></div>
-      <div class="hero-buttons"><button id="character-button" type="button">Character <kbd>C</kbd></button><button id="inventory-button" type="button">Inventory <kbd>I</kbd></button><button id="shops-button" type="button">Shops <kbd>B</kbd></button><button id="events-button" type="button">Events <span id="events-ready-dot" hidden aria-label="Reward ready">●</span> <kbd>J</kbd></button><button id="potion-button" type="button">Potion <b id="potions">0</b> <kbd>Q</kbd></button></div>
+
+    <!-- Bottom-Right: Menu Dock -->
+    <nav class="menu-dock hero-controls" aria-label="Hero controls">
+      <button id="character-button" class="dock-btn" type="button" title="Character [C]">
+        <img src="./assets/svg/menu-character.svg" alt=""/>
+        <kbd class="keycap">C</kbd>
+        <span class="dock-btn-label">Hero</span>
+      </button>
+
+      <button id="inventory-button" class="dock-btn" type="button" title="Inventory [I]">
+        <img src="./assets/svg/menu-inventory.svg" alt=""/>
+        <kbd class="keycap">I</kbd>
+        <span class="dock-btn-label">Bags</span>
+      </button>
+
+      <button id="shops-button" class="dock-btn" type="button" title="Shops & Forge [B]">
+        <img src="./assets/svg/menu-shops.svg" alt=""/>
+        <kbd class="keycap">B</kbd>
+        <span class="dock-btn-label">Shops</span>
+      </button>
+
+      <button id="events-button" class="dock-btn" type="button" title="Events [J]">
+        <img src="./assets/svg/menu-events.svg" alt=""/>
+        <kbd class="keycap">J</kbd>
+        <span class="dock-btn-label">Events</span>
+        <span id="events-ready-dot" class="dock-badge" hidden aria-label="Reward ready"></span>
+      </button>
+
+      <button id="hud-settings-btn" class="dock-btn" type="button" title="Settings">
+        <img src="./assets/svg/menu-settings.svg" alt=""/>
+        <span class="dock-btn-label">Options</span>
+      </button>
     </nav>
   </div>
+
+  <!-- Teleport Status Modal Banner -->
   <div id="teleport-status" role="status" aria-live="polite" hidden></div>
+
+  <!-- =======================================================================
+       TITLE SCREEN / GAME STATE MODAL (Ready / Paused / Dead)
+       ======================================================================= -->
   <div id="modal" class="modal-backdrop">
-    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
-      <div class="sigil" aria-hidden="true"><span>†</span></div>
-      <p id="modal-eyebrow" class="eyebrow">A light where none remains</p>
-      <h2 id="modal-title">ASHEN <span>VEIL</span></h2>
-      <div class="ornament" aria-hidden="true"><span>◆</span></div>
-      <p id="modal-description">Beyond the iron gates, the graveyard stirs.<br>The nameless dead rise beneath an ashen sky.<br>Carry your steel into the dark. Let them rest.</p>
-      <fieldset id="class-selection" class="class-selection"><legend>Choose your calling</legend><div id="class-options" class="class-options"></div></fieldset>
-      <button id="modal-action" class="primary-button" type="button">Enter the graveyard <span aria-hidden="true">↗</span></button>
-      <div id="save-controls"><button id="continue-game" type="button" disabled>Continue character</button><button id="export-save" type="button">Export save</button><button id="import-save" type="button">Import save</button><input id="save-file" type="file" accept="application/json,.json" hidden><p id="save-status" role="status"></p></div>
-      <details id="settings-panel"><summary>Settings</summary><label>Visual quality <select id="quality-setting"><option value="high">High · shadows</option><option value="low">Low · no shadows</option></select></label><label><input id="motion-setting" type="checkbox"> Reduced motion</label><label>Volume <input id="volume-setting" type="range" min="0" max="1" step="0.05"></label><label><input id="mute-setting" type="checkbox"> Mute audio</label><label>Auto-salvage on pickup <select id="auto-salvage-setting"><option value="none">Off · keep all gear</option><option value="common">Common</option><option value="magic">Common + Magic</option><option value="rare">Common + Magic + Rare</option></select></label><label>Salvage one exact rarity <select id="auto-salvage-exact-setting"><option value="none">Off</option><option value="common">Common only</option><option value="magic">Magic only</option><option value="rare">Rare only</option></select></label><label><input id="auto-equip-setting" type="checkbox"> Automatically equip stronger gear in Automation</label><small>Exact rarity overrides the cumulative filter when selected. Upgrades are evaluated first. Favorites and Legendary gear are always kept.</small><p id="settings-status" role="status"></p></details>
-      <p id="modal-hint" class="modal-hint">Manual by default · Hold right mouse to attack · E to interact.</p>
+    <section class="gothic-panel panel-corners title-card modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
+      <!-- Title Screen Logo -->
+      <div class="title-logo-group">
+        <p id="modal-eyebrow" class="eyebrow title-tagline">A LIGHT WHERE NONE REMAINS</p>
+        <h2 id="modal-title" class="title-logo">ASHEN <span>VEIL</span></h2>
+        <div class="diamond-divider" aria-hidden="true"></div>
+        <p class="title-version">ISOMETRIC ACTION RPG · VERSION 1.21.3</p>
+      </div>
+
+      <p id="modal-description">Beyond the iron gates, the graveyard stirs.<br>Carry your steel into the dark. Let them rest.</p>
+
+      <!-- 3 Illustrated Class Cards Selection -->
+      <fieldset id="class-selection" class="class-selection">
+        <legend>CHOOSE YOUR CALLING</legend>
+        <div id="class-options" class="class-cards-grid">
+          <!-- Dynamically populated or enhanced via JS -->
+        </div>
+      </fieldset>
+
+      <!-- Save Card Preview (if save exists) -->
+      <div id="save-card-preview" class="save-card-preview" hidden>
+        <div class="save-card-info">
+          <span>Active Save: <b id="save-card-class">Warrior</b></span>
+          <span>Level <b id="save-card-level">1</b></span>
+          <span id="save-status">Ready</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons Row -->
+      <div class="title-actions-row">
+        <button id="modal-action" class="btn-primary" type="button">
+          <span>BEGIN JOURNEY</span>
+          <span aria-hidden="true">⚔</span>
+        </button>
+
+        <div id="save-controls" class="title-secondary-actions">
+          <button id="continue-game" class="btn-secondary" type="button" disabled>
+            <span>CONTINUE</span>
+          </button>
+          <button id="export-save" class="btn-icon" type="button" title="Export save to file">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+          <button id="import-save" class="btn-icon" type="button" title="Import save from file">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          </button>
+          <details id="settings-panel" class="settings-disclosure" style="display: inline-block;">
+            <summary id="modal-settings-btn" class="btn-icon" title="Open Settings" style="list-style: none; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <img src="./assets/svg/menu-settings.svg" alt="Settings"/>
+            </summary>
+          </details>
+          <input id="save-file" type="file" accept="application/json,.json" hidden>
+        </div>
+      </div>
+
+      <!-- Controls Cheat-Sheet Collapsible -->
+      <details class="controls-cheatsheet">
+        <summary>CONTROLS & SHORTCUTS</summary>
+        <div class="controls-grid">
+          <div class="control-item"><kbd class="keycap">L-Click</kbd><span>Move hero</span></div>
+          <div class="control-item"><kbd class="keycap">R-Hold</kbd><span>Auto-attack</span></div>
+          <div class="control-item"><kbd class="keycap">1-4</kbd><span>Cast active skills</span></div>
+          <div class="control-item"><kbd class="keycap">Space</kbd><span>Dodge roll</span></div>
+          <div class="control-item"><kbd class="keycap">Q</kbd><span>Drink health potion</span></div>
+          <div class="control-item"><kbd class="keycap">E</kbd><span>Interact with shrines</span></div>
+          <div class="control-item"><kbd class="keycap">C / I</kbd><span>Hero & Inventory</span></div>
+          <div class="control-item"><kbd class="keycap">B / J</kbd><span>Shops & Events</span></div>
+          <div class="control-item"><kbd class="keycap">Esc</kbd><span>Pause / Close panel</span></div>
+        </div>
+      </details>
+
+      <p id="modal-hint" class="modal-hint" hidden></p>
     </section>
   </div>
+
+  <!-- =======================================================================
+       CHARACTER / INVENTORY / SHOPS / EVENTS / JOURNEY MODAL
+       ======================================================================= -->
   <div id="inventory-overlay" class="modal-backdrop" hidden>
-    <section class="inventory-card" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
-      <header class="panel-header"><div><p class="eyebrow">A moment beyond the fray</p><h2 id="panel-title">The Wanderer</h2></div><button id="panel-close" type="button" aria-label="Close character and inventory">Close <kbd>Esc</kbd></button></header>
-      <div class="panel-tabs" role="tablist" aria-label="Hero panels"><button id="character-tab" role="tab" aria-selected="true" aria-controls="character-panel" type="button">Character</button><button id="inventory-tab" role="tab" aria-selected="false" aria-controls="inventory-panel" tabindex="-1" type="button">Inventory <span id="inventory-count">0 / 24</span></button><button id="shops-tab" role="tab" aria-selected="false" aria-controls="shops-panel" tabindex="-1" type="button">Shops</button><button id="events-tab" role="tab" aria-selected="false" aria-controls="events-panel" tabindex="-1" type="button">Events</button></div>
-      <div class="currencies panel-wallet" aria-label="Wallet"><span>Gold coins <b id="panel-gold">0</b></span><span>Gems <b id="panel-gems">0</b></span><span>Diamonds <b id="panel-diamonds">0</b></span><span>Dust <b id="panel-dust">0</b></span><span>Shards <b id="panel-shards">0</b></span></div>
+    <section class="gothic-panel panel-corners main-modal-panel inventory-card" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
+      <!-- Modal Header with Tab Navigation & Close Button -->
+      <header class="modal-header-bar panel-header">
+        <div class="modal-nav-tabs panel-tabs" role="tablist" aria-label="Hero panels">
+          <button id="character-tab" class="tab-btn" role="tab" aria-selected="true" aria-controls="character-panel" type="button">
+            <img src="./assets/svg/menu-character.svg" alt=""/>
+            <span>CHARACTER</span>
+          </button>
+          <button id="inventory-tab" class="tab-btn" role="tab" aria-selected="false" aria-controls="inventory-panel" tabindex="-1" type="button">
+            <img src="./assets/svg/menu-inventory.svg" alt=""/>
+            <span>INVENTORY</span>
+            <span id="inventory-count" class="level-badge-pill">0 / 24</span>
+          </button>
+          <button id="shops-tab" class="tab-btn" role="tab" aria-selected="false" aria-controls="shops-panel" tabindex="-1" type="button">
+            <img src="./assets/svg/menu-shops.svg" alt=""/>
+            <span>SHOPS</span>
+          </button>
+          <button id="events-tab" class="tab-btn" role="tab" aria-selected="false" aria-controls="events-panel" tabindex="-1" type="button">
+            <img src="./assets/svg/menu-events.svg" alt=""/>
+            <span>EVENTS</span>
+            <span id="panel-events-dot" class="dock-badge" hidden></span>
+          </button>
+          <button id="journey-tab" class="tab-btn" role="tab" aria-selected="false" aria-controls="journey-panel" tabindex="-1" type="button">
+            <img src="./assets/svg/menu-journey.svg" alt=""/>
+            <span>JOURNEY</span>
+          </button>
+        </div>
+
+        <button id="panel-close" class="modal-close-btn" type="button" aria-label="Close character and inventory">
+          <span>Close</span>
+          <kbd class="keycap">Esc</kbd>
+        </button>
+      </header>
+
+      <!-- Top Currency Strip Inside Panel -->
+      <div class="modal-wallet-bar currencies panel-wallet" aria-label="Wallet">
+        <div class="currencies-strip">
+          <span class="currency-chip"><img src="./assets/svg/currency-gold.svg" alt="Gold"/> <b id="panel-gold">0</b></span>
+          <span class="currency-chip"><img src="./assets/svg/currency-gems.svg" alt="Gems"/> <b id="panel-gems">0</b></span>
+          <span class="currency-chip"><img src="./assets/svg/currency-diamonds.svg" alt="Diamonds"/> <b id="panel-diamonds">0</b></span>
+          <span class="currency-chip"><img src="./assets/svg/currency-dust.svg" alt="Dust"/> <b id="panel-dust">0</b></span>
+          <span class="currency-chip"><img src="./assets/svg/currency-shards.svg" alt="Shards"/> <b id="panel-shards">0</b></span>
+        </div>
+      </div>
+
       <p id="panel-status" class="panel-status" role="status" aria-live="polite" hidden></p>
-      <section id="character-panel" class="panel-content" role="tabpanel" aria-labelledby="character-tab"><h3>Journey & quests</h3><div id="journey-list"></div><h3>Attributes & combat</h3><dl id="hero-stats" class="stat-grid"></dl><h3>Talents & attributes</h3><div id="talent-list"></div><h3>Equipped</h3><div id="equipment-list" class="equipment-list"></div></section>
-      <section id="inventory-panel" class="panel-content" role="tabpanel" aria-labelledby="inventory-tab" hidden><p class="panel-help">Compare each item's modifiers with your equipped piece. Equipping replaces the item in that slot.</p><label>Show <select id="item-filter"><option value="all">All gear</option><option value="favorite">Favorites</option><option>weapon</option><option>armor</option><option>helm</option><option>gloves</option><option>boots</option><option>ring</option></select></label> <label>Sort <select id="item-sort"><option value="rarity">Rarity</option><option value="level">Level</option><option value="name">Name</option></select></label><details id="auto-sell-options" class="auto-sell-options"><summary>Auto-sell <span id="auto-sell-summary">Off</span></summary><div id="auto-sell-controls"><label><input id="auto-sell-enabled" type="checkbox"> Enable auto-sell during Automation</label><fieldset id="auto-sell-rarities"><legend>Rarities (choose any)</legend></fieldset><fieldset id="auto-sell-types"><legend>Item types (choose any)</legend></fieldset><label>Payout currency <select id="auto-sell-currency"><option value="gold">Gold coins</option><option value="gems">Gems</option><option value="diamonds">Diamonds</option></select></label></div><p class="panel-help">Matches a selected rarity AND a selected item type. Select at least one of each; empty selections sell nothing. Equipped items and favorites are protected. Auto-equip upgrades are evaluated first. Runs only during Automation.</p><p class="panel-help">Payout per item: gold = base sale value; gems = max(1, floor(gold / 50)); diamonds = max(1, floor(gold / 200)).</p></details><p class="panel-help">Store, sell, salvage and forge services require Ember Refuge. Delete permanently removes an item without a payout.</p><div id="inventory-list" class="inventory-list"></div></section>
-      <section id="shops-panel" class="panel-content" role="tabpanel" aria-labelledby="shops-tab" hidden><p id="shop-availability" class="panel-help">Return to Ember Refuge to use shops, forge and stash services.</p><h3>Merchant & forge</h3><p class="panel-help">Buy supplies and expand your pack here. Individual gear upgrades and rerolls are available on Inventory item cards.</p><div id="merchant-list" class="shop-actions"></div><h3>Personal stash · 48 slots</h3><p class="panel-help">Store gear from its Inventory card; retrieve it here.</p><div id="stash-list" class="shop-actions"></div></section>
-      <section id="events-panel" class="panel-content" role="tabpanel" aria-labelledby="events-tab" hidden><div id="events-list"></div></section>
-      <p class="panel-footer">The graveyard waits while this panel is open.</p>
+
+      <!-- Scrollable Tab Panel Viewport -->
+      <div class="tab-panel-viewport">
+        <!-- 1. CHARACTER TAB (2-COLUMN: Paper-Doll Left, Attributes/Stats/Talents Right) -->
+        <section id="character-panel" class="panel-content character-tab-layout" role="tabpanel" aria-labelledby="character-tab">
+          <!-- Left Column: Paper-Doll Equipment -->
+          <div class="paperdoll-section">
+            <span class="eyebrow">EQUIPMENT</span>
+            <h3 id="panel-title" class="title-version">The Wanderer · Level 1</h3>
+
+            <div class="paperdoll-canvas-wrap">
+              <img src="./assets/paperdoll-silhouette.png" class="paperdoll-silhouette" alt="Character silhouette"/>
+
+              <!-- Paperdoll Equipment Slots -->
+              <div class="equip-slot slot-helm" data-slot="helm" title="Helm">
+                <img src="./assets/svg/slot-helm.svg" alt="Helm"/>
+              </div>
+              <div class="equip-slot slot-amulet" data-slot="amulet" title="Amulet">
+                <img src="./assets/svg/slot-amulet.svg" alt="Amulet"/>
+              </div>
+              <div class="equip-slot slot-weapon" data-slot="weapon" title="Main Hand Weapon">
+                <img src="./assets/svg/slot-weapon.svg" alt="Weapon"/>
+              </div>
+              <div class="equip-slot slot-chest" data-slot="armor" title="Chest Armor">
+                <img src="./assets/svg/slot-chest.svg" alt="Armor"/>
+              </div>
+              <div class="equip-slot slot-offhand" data-slot="offhand" title="Offhand / Shield">
+                <img src="./assets/svg/slot-offhand.svg" alt="Offhand"/>
+              </div>
+              <div class="equip-slot slot-gloves" data-slot="gloves" title="Gloves">
+                <img src="./assets/svg/slot-gloves.svg" alt="Gloves"/>
+              </div>
+              <div class="equip-slot slot-belt" data-slot="ring" title="Ring">
+                <img src="./assets/svg/slot-ring.svg" alt="Ring"/>
+              </div>
+              <div class="equip-slot slot-boots" data-slot="boots" title="Boots">
+                <img src="./assets/svg/slot-boots.svg" alt="Boots"/>
+              </div>
+            </div>
+
+            <!-- Dynamic Equipment Items List (for compatibility) -->
+            <div id="equipment-list" class="equipment-list" hidden></div>
+          </div>
+
+          <!-- Right Column: Attributes, Derived Stats, Talent Tree -->
+          <div class="character-details-col">
+            <!-- Primary Attributes Grid -->
+            <div>
+              <span class="eyebrow">PRIMARY ATTRIBUTES</span>
+              <div class="attributes-card-grid">
+                <div class="attribute-card">
+                  <div class="attribute-info">
+                    <img src="./assets/svg/stat-strength.svg" alt="STR"/>
+                    <div>
+                      <strong>STRENGTH</strong>
+                      <div class="stat-track" style="width: 80px; margin-top: 3px;"><div class="stat-fill fill-warrior" style="width: 60%;"></div></div>
+                    </div>
+                  </div>
+                  <span id="attr-strength-val" class="attribute-val">12</span>
+                </div>
+
+                <div class="attribute-card">
+                  <div class="attribute-info">
+                    <img src="./assets/svg/stat-intelligence.svg" alt="INT"/>
+                    <div>
+                      <strong>INTELLIGENCE</strong>
+                      <div class="stat-track" style="width: 80px; margin-top: 3px;"><div class="stat-fill fill-mage" style="width: 70%;"></div></div>
+                    </div>
+                  </div>
+                  <span id="attr-intelligence-val" class="attribute-val">14</span>
+                </div>
+
+                <div class="attribute-card">
+                  <div class="attribute-info">
+                    <img src="./assets/svg/stat-dexterity.svg" alt="DEX"/>
+                    <div>
+                      <strong>DEXTERITY</strong>
+                      <div class="stat-track" style="width: 80px; margin-top: 3px;"><div class="stat-fill fill-archer" style="width: 50%;"></div></div>
+                    </div>
+                  </div>
+                  <span id="attr-dexterity-val" class="attribute-val">10</span>
+                </div>
+
+                <div class="attribute-card">
+                  <div class="attribute-info">
+                    <img src="./assets/svg/stat-vitality.svg" alt="VIT"/>
+                    <div>
+                      <strong>VITALITY</strong>
+                      <div class="stat-track" style="width: 80px; margin-top: 3px;"><div class="stat-fill" style="width: 65%; background: #f87171;"></div></div>
+                    </div>
+                  </div>
+                  <span id="attr-vitality-val" class="attribute-val">12</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Derived / Combat Stats -->
+            <div>
+              <span class="eyebrow">COMBAT STATISTICS</span>
+              <dl id="hero-stats" class="combat-stats-box stat-grid"></dl>
+            </div>
+
+            <!-- Visual Talent Tree -->
+            <div class="talent-tree-wrapper">
+              <div class="talent-tree-header">
+                <div>
+                  <span class="eyebrow">TALENT TREE</span>
+                  <h4>Specialization & Talents</h4>
+                </div>
+                <div id="talent-points-chip" class="level-badge-pill">0 Points</div>
+              </div>
+              <div id="talent-list" class="talent-nodes-canvas"></div>
+            </div>
+
+            <!-- World Expeditions & Travel -->
+            <div class="journey-section-wrap" style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(201, 164, 92, 0.25);">
+              <span class="eyebrow">WORLD EXPEDITIONS & CAMPAIGN TRAVEL</span>
+              <div id="journey-list" class="journey-list-container" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. INVENTORY TAB -->
+        <section id="inventory-panel" class="panel-content inventory-tab-layout" role="tabpanel" aria-labelledby="inventory-tab" hidden>
+          <div class="inventory-controls-bar">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label class="eyebrow" style="margin-right: 6px;">Filter:</label>
+              <select id="item-filter" class="btn-secondary" style="height: 36px;">
+                <option value="all">All Gear</option>
+                <option value="favorite">Favorites</option>
+                <option value="weapon">Weapons</option>
+                <option value="armor">Armor</option>
+                <option value="helm">Helms</option>
+                <option value="gloves">Gloves</option>
+                <option value="boots">Boots</option>
+                <option value="ring">Rings</option>
+              </select>
+
+              <label class="eyebrow" style="margin-left: 12px; margin-right: 6px;">Sort:</label>
+              <select id="item-sort" class="btn-secondary" style="height: 36px;">
+                <option value="rarity">Rarity</option>
+                <option value="level">Level</option>
+                <option value="name">Name</option>
+              </select>
+            </div>
+
+            <!-- Auto-Sell Accordion -->
+            <details id="auto-sell-options" class="auto-sell-options" style="font-size: 12px;">
+              <summary><span class="eyebrow">Auto-Sell</span> <span id="auto-sell-summary">Off</span></summary>
+              <div id="auto-sell-controls">
+                <label><input id="auto-sell-enabled" type="checkbox"> Enable auto-sell during Automation</label>
+                <fieldset id="auto-sell-rarities"><legend>Rarities</legend></fieldset>
+                <fieldset id="auto-sell-types"><legend>Item types</legend></fieldset>
+                <label>Payout currency <select id="auto-sell-currency"><option value="gold">Gold coins</option><option value="gems">Gems</option><option value="diamonds">Diamonds</option></select></label>
+              </div>
+            </details>
+          </div>
+
+          <p class="panel-help" style="font-size: 12px; color: var(--fog);">Click an item to equip or manage. Equipped items can be compared against your active gear.</p>
+          <div id="inventory-list" class="inventory-grid inventory-list"></div>
+        </section>
+
+        <!-- 3. SHOPS TAB -->
+        <section id="shops-panel" class="panel-content" role="tabpanel" aria-labelledby="shops-tab" hidden>
+          <p id="shop-availability" class="panel-help">Return to Ember Refuge to use shops, forge and stash services.</p>
+          <div style="margin: 16px 0;">
+            <span class="eyebrow">MERCHANT & FORGE</span>
+            <div id="merchant-list" class="shop-actions" style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;"></div>
+          </div>
+          <div style="margin: 24px 0;">
+            <span class="eyebrow">PERSONAL STASH · 48 SLOTS</span>
+            <div id="stash-list" class="shop-actions" style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;"></div>
+          </div>
+        </section>
+
+        <!-- 4. EVENTS TAB -->
+        <section id="events-panel" class="panel-content" role="tabpanel" aria-labelledby="events-tab" hidden>
+          <div id="events-list"></div>
+        </section>
+
+        <!-- 5. JOURNEY TAB -->
+        <section id="journey-panel" class="panel-content" role="tabpanel" aria-labelledby="journey-tab" hidden>
+          <span class="eyebrow">WORLD EXPEDITIONS & CAMPAIGN</span>
+          <p class="panel-help" style="margin-top: 10px;">Select your journey destination, active bounties, and campaign tier in the Character tab.</p>
+        </section>
+      </div>
+
+      <p class="panel-footer modal-status-footer">The graveyard waits while this panel is open.</p>
     </section>
   </div>
-  <!-- main.js owns boot success/error text and hides this once the scene is ready. -->
+
+  <!-- =======================================================================
+       SETTINGS MODAL
+       ======================================================================= -->
+  <div id="settings-modal" class="modal-backdrop hidden">
+    <section class="gothic-panel panel-corners settings-modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(201,164,92,0.3); padding-bottom: 10px;">
+        <h2 id="settings-title" class="eyebrow" style="font-size: 16px;">GAME SETTINGS</h2>
+        <button id="settings-close" class="modal-close-btn" type="button">Close</button>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-row">
+          <label for="quality-setting">Visual Quality</label>
+          <select id="quality-setting">
+            <option value="high">High · Full Shadows & Fog</option>
+            <option value="low">Low · Performance Mode</option>
+          </select>
+        </div>
+
+        <div class="settings-row">
+          <label for="motion-setting">Reduced Motion</label>
+          <input id="motion-setting" type="checkbox">
+        </div>
+
+        <div class="settings-row">
+          <label for="volume-setting">Master Volume</label>
+          <input id="volume-setting" type="range" min="0" max="1" step="0.05" style="width: 140px;">
+        </div>
+
+        <div class="settings-row">
+          <label for="mute-setting">Mute Audio</label>
+          <input id="mute-setting" type="checkbox">
+        </div>
+
+        <div class="settings-row">
+          <label for="ui-scale-setting">UI Scale (80% - 140%)</label>
+          <input id="ui-scale-setting" type="range" min="0.8" max="1.4" step="0.05" value="1.0" style="width: 140px;">
+        </div>
+
+        <div class="settings-row">
+          <label for="auto-salvage-setting">Auto-salvage on pickup</label>
+          <select id="auto-salvage-setting">
+            <option value="none">Off · Keep all gear</option>
+            <option value="common">Common</option>
+            <option value="magic">Common + Magic</option>
+            <option value="rare">Common + Magic + Rare</option>
+          </select>
+        </div>
+
+        <div class="settings-row">
+          <label for="auto-salvage-exact-setting">Salvage exact rarity</label>
+          <select id="auto-salvage-exact-setting">
+            <option value="none">Off</option>
+            <option value="common">Common only</option>
+            <option value="magic">Magic only</option>
+            <option value="rare">Rare only</option>
+          </select>
+        </div>
+
+        <div class="settings-row">
+          <label for="auto-equip-setting">Auto-equip stronger gear in Automation</label>
+          <input id="auto-equip-setting" type="checkbox">
+        </div>
+
+        <p id="settings-status" role="status" style="font-size: 11px; color: var(--gold-bright); margin-top: 8px;"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Loading Screen status -->
   <div id="loading" role="status" aria-live="polite">Lighting the last embers…</div>
   <noscript><div class="noscript">Ashen Veil requires JavaScript to enter the graveyard.</div></noscript>
+
   <script type="module">
-    // Dynamic import also catches CDN/network failures before the engine can start.
     import('./src/main.js').catch(error => {
       const status = document.getElementById('loading');
-      status.hidden = false;
-      status.textContent = `Unable to load the game: ${error.message}. Check your connection and serve this folder over HTTP(S).`;
+      if (status) {
+        status.hidden = false;
+        status.textContent = `Unable to load the game: ${error.message}. Check your connection and serve this folder over HTTP(S).`;
+      }
     });
   </script>
 </body>

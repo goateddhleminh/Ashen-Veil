@@ -5,7 +5,11 @@ import { saleValue, craftCost, rerollCost } from './economy.js';
 import { LEGENDARIES, filterItems } from './items.js';
 
 const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
-const labels = { strength: 'Strength', intelligence: 'Intelligence', dexterity: 'Dexterity', vitality: 'Vitality', damage: 'Damage', armor: 'Armor', life: 'Maximum life', maxHp: 'Maximum life', crit: 'Critical chance', speed: 'Movement speed', range: 'Attack range', attackSeconds: 'Attack interval' };
+const labels = {
+  strength: 'Strength', intelligence: 'Intelligence', dexterity: 'Dexterity', vitality: 'Vitality',
+  damage: 'Damage', armor: 'Armor', life: 'Maximum life', maxHp: 'Maximum life',
+  crit: 'Critical chance', speed: 'Movement speed', range: 'Attack range', attackSeconds: 'Attack interval'
+};
 const number = value => Number(finite(value).toFixed(2)).toLocaleString();
 const valueText = (key, value) => `${number(value)}${key === 'crit' ? '%' : key === 'attackSeconds' ? 's' : ''}`;
 const element = (tag, className, text) => {
@@ -15,10 +19,18 @@ const element = (tag, className, text) => {
   return node;
 };
 
-// Presentation only: simulation and pause ownership remain in main.js.
+// Skill icon asset mappings
+const SKILL_ICONS = {
+  warrior: ['warrior-sweep', 'warrior-slam', 'warrior-shout', 'warrior-cataclysm'],
+  mage: ['mage-ember', 'mage-frost', 'mage-ward', 'mage-starfall'],
+  archer: ['archer-volley', 'archer-snare', 'archer-barrage', 'archer-arrowstorm']
+};
+
 export class UI {
   constructor({ onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy, onAutoSellChange }) {
     this.callbacks = { onStart, onRestart, onPause, onPanel, onBackgroundToggle, onEquip, onUnequip, onPotion, onContinue, onExport, onImport, onSaveStatus, onEconomy, onAutoSellChange };
+    
+    // Title screen actions
     document.getElementById('continue-game').onclick = () => onContinue?.(this.selectedClass);
     document.getElementById('export-save').onclick = () => onExport?.(this.selectedClass);
     document.getElementById('import-save').onclick = () => document.getElementById('save-file').click();
@@ -26,6 +38,7 @@ export class UI {
       const file = event.target.files[0]; event.target.value = '';
       if (file) { await onImport?.(file, this.selectedClass); this.refreshSaves(); }
     };
+
     this.state = null;
     this.selectedClass = 'warrior';
     this.activeTab = 'character';
@@ -34,6 +47,8 @@ export class UI {
     this.announcementTimer = null;
     this.shopAvailable = false;
     this.autoSell = { enabled: false, rarities: [], types: [], currency: 'gold' };
+
+    // Cache core nodes
     this.nodes = Object.fromEntries([
       'hud', 'modal', 'modal-title', 'modal-eyebrow', 'modal-description', 'modal-action', 'modal-hint',
       'pause-button', 'background-toggle', 'health-globe', 'health-current', 'health-max', 'level', 'kills', 'enemy-count',
@@ -41,61 +56,255 @@ export class UI {
       'character-button', 'inventory-button', 'shops-button', 'shops-tab', 'shops-panel', 'potion-button', 'potions', 'gold', 'gems', 'diamonds', 'dust', 'shards',
       'panel-status', 'panel-gold', 'panel-gems', 'panel-diamonds', 'panel-dust', 'panel-shards',
       'inventory-overlay', 'panel-title', 'panel-close', 'character-tab', 'inventory-tab',
-      'events-button', 'events-tab', 'events-panel', 'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
+      'events-button', 'events-tab', 'events-panel', 'journey-tab', 'journey-panel', 'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
     ].map(id => [id, document.getElementById(id)]));
-    for(const id of ['item-filter','item-sort']) document.getElementById(id).onchange=()=>{this.inventoryFingerprint='';this.renderPanel();};
+
+    for (const id of ['item-filter', 'item-sort']) {
+      const el = document.getElementById(id);
+      if (el) el.onchange = () => { this.inventoryFingerprint = ''; this.renderPanel(); };
+    }
+
     this.buildClasses();
     this.buildAutoSell();
-    for (const root of [this.nodes.modal, this.nodes['inventory-overlay'], this.nodes['pause-button'], document.querySelector('.hero-controls'), document.querySelector('.combat-mode')]) {
+    this.initSettingsModal();
+    this.initEmbers();
+
+    // Prevent game canvas mouse events when clicking UI
+    const interactiveRoots = [
+      this.nodes.modal, this.nodes['inventory-overlay'], this.nodes['pause-button'],
+      document.querySelector('.hero-controls'), document.querySelector('.combat-hud'),
+      document.getElementById('settings-modal'), document.getElementById('hud-settings-btn')
+    ].filter(Boolean);
+
+    for (const root of interactiveRoots) {
       for (const type of ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'dblclick', 'contextmenu', 'click']) {
         root.addEventListener(type, event => event.stopPropagation());
       }
       root.addEventListener('keydown', event => {
-        // Main owns all game shortcuts, including panel dismissal.
         if (event.key === 'Tab' && ['ready', 'paused', 'dead', 'inventory'].includes(this.state)) this.trapFocus(event);
-        const gameplayKey=['Digit1','Digit2','Digit3','Digit4','Space','KeyE'].includes(event.code);
-        if(this.state==='playing'&&gameplayKey){event.preventDefault();return;}
+        const gameplayKey = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Space', 'KeyE'].includes(event.code);
+        if (this.state === 'playing' && gameplayKey) { event.preventDefault(); return; }
         if ((event.key !== 'Escape' && event.target.matches('input, select, textarea')) || !['escape', 'c', 'i', 'b', 'j', 'q'].includes(event.key.toLowerCase())) event.stopPropagation();
       });
       root.addEventListener('keyup', event => event.stopPropagation());
     }
-    this.nodes['pause-button'].addEventListener('click', () => this.callbacks.onPause?.());
-    this.nodes['background-toggle'].addEventListener('click', () => this.callbacks.onBackgroundToggle?.());
-    this.nodes['modal-action'].addEventListener('click', () => {
+
+    this.nodes['pause-button']?.addEventListener('click', () => this.callbacks.onPause?.());
+    this.nodes['background-toggle']?.addEventListener('click', () => this.callbacks.onBackgroundToggle?.());
+    this.nodes['modal-action']?.addEventListener('click', () => {
       if (this.state === 'ready') this.callbacks.onStart?.(this.selectedClass);
       else if (this.state === 'dead') this.callbacks.onRestart?.(this.selectedClass);
       else if (this.state === 'paused') this.callbacks.onPause?.();
     });
-    for (const tab of ['character', 'inventory', 'shops', 'events']) {
-      this.nodes[`${tab}-button`].addEventListener('click', () => { this.selectTab(tab); this.callbacks.onPanel?.(); });
-      this.nodes[`${tab}-tab`].addEventListener('click', () => this.selectTab(tab));
-      this.nodes[`${tab}-tab`].addEventListener('keydown', event => {
-        if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-          event.preventDefault();
-          const tabs=['character','inventory','shops','events'];
-          const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : tabs[(tabs.indexOf(tab)+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];
-          this.selectTab(next); this.nodes[`${next}-tab`].focus();
+
+    // Tab buttons
+    for (const tab of ['character', 'inventory', 'shops', 'events', 'journey']) {
+      const navBtn = this.nodes[`${tab}-button`];
+      const tabEl = this.nodes[`${tab}-tab`];
+      if (navBtn) navBtn.addEventListener('click', () => { this.selectTab(tab); this.callbacks.onPanel?.(); });
+      if (tabEl) {
+        tabEl.addEventListener('click', () => this.selectTab(tab));
+        tabEl.addEventListener('keydown', event => {
+          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            const tabs = ['character', 'inventory', 'shops', 'events', 'journey'].filter(t => this.nodes[`${t}-tab`]);
+            const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : tabs[(tabs.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+            this.selectTab(next); this.nodes[`${next}-tab`].focus();
+          }
+        });
+      }
+    }
+
+    this.nodes['potion-button']?.addEventListener('click', () => this.callbacks.onPotion?.());
+    this.nodes['panel-close']?.addEventListener('click', () => this.callbacks.onPanel?.());
+    this.nodes['inventory-overlay']?.addEventListener('click', event => { if (event.target === this.nodes['inventory-overlay']) this.callbacks.onPanel?.(); });
+
+    this.setState('ready');
+  }
+
+  initEmbers() {
+    const canvas = document.getElementById('ember-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    const particles = Array.from({ length: 35 }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * 2 + 1,
+      speedX: (Math.random() - 0.5) * 0.4,
+      speedY: -Math.random() * 0.7 - 0.3,
+      alpha: Math.random() * 0.7 + 0.3,
+      fade: Math.random() * 0.01 + 0.005
+    }));
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+      for (const p of particles) {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        p.alpha -= p.fade;
+        if (p.alpha <= 0 || p.y < -10) {
+          p.x = Math.random() * width;
+          p.y = height + 10;
+          p.alpha = Math.random() * 0.7 + 0.3;
         }
+        ctx.fillStyle = `rgba(255, 140, 50, ${p.alpha})`;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = '#ff7a2f';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      requestAnimationFrame(render);
+    };
+    render();
+  }
+
+  initSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    const closeBtn = document.getElementById('settings-close');
+    const panel = document.getElementById('settings-panel');
+    const openBtns = [document.getElementById('modal-settings-btn'), document.getElementById('hud-settings-btn')].filter(Boolean);
+
+    openBtns.forEach(btn => btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      modal?.classList.remove('hidden');
+      if (panel) panel.open = true;
+    }));
+
+    closeBtn?.addEventListener('click', () => {
+      modal?.classList.add('hidden');
+      if (panel) panel.open = false;
+    });
+
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.add('hidden');
+        if (panel) panel.open = false;
+      }
+    });
+
+    if (panel) {
+      panel.addEventListener('toggle', () => {
+        if (panel.open) modal?.classList.remove('hidden');
+        else modal?.classList.add('hidden');
+      });
+
+      let isOpen = panel.hasAttribute('open');
+      Object.defineProperty(panel, 'open', {
+        get() { return this.hasAttribute('open'); },
+        set(val) {
+          isOpen = Boolean(val);
+          if (isOpen) {
+            this.setAttribute('open', '');
+            modal?.classList.remove('hidden');
+          } else {
+            this.removeAttribute('open');
+            modal?.classList.add('hidden');
+          }
+        },
+        configurable: true
       });
     }
-    this.nodes['potion-button'].addEventListener('click', () => this.callbacks.onPotion?.());
-    this.nodes['panel-close'].addEventListener('click', () => this.callbacks.onPanel?.());
-    this.nodes['inventory-overlay'].addEventListener('click', event => { if (event.target === this.nodes['inventory-overlay']) this.callbacks.onPanel?.(); });
-    this.setState('ready');
+
+    // UI Scale setting
+    const scaleSlider = document.getElementById('ui-scale-setting');
+    if (scaleSlider) {
+      scaleSlider.addEventListener('input', (e) => {
+        document.documentElement.style.setProperty('--ui-scale', e.target.value);
+      });
+    }
+  }
+
+  buildClasses() {
+    const root = this.nodes['class-options'];
+    if (!root) return;
+    root.replaceChildren();
+
+    const statProfiles = {
+      warrior: { power: 85, defense: 95, speed: 45, attr: 'STRENGTH' },
+      mage: { power: 95, defense: 50, speed: 65, attr: 'INTELLIGENCE' },
+      archer: { power: 75, defense: 60, speed: 90, attr: 'DEXTERITY' }
+    };
+
+    for (const id of ['warrior', 'mage', 'archer']) {
+      const cls = CLASSES[id];
+      const stats = statProfiles[id];
+      const card = element('label', `class-card ${id === this.selectedClass ? 'selected' : ''}`);
+      card.dataset.class = id;
+
+      const input = element('input');
+      input.type = 'radio';
+      input.name = 'hero-class';
+      input.value = id;
+      input.checked = id === this.selectedClass;
+
+      input.addEventListener('change', () => {
+        if (input.checked) {
+          this.selectedClass = id;
+          document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          this.refreshSaves();
+        }
+      });
+
+      card.addEventListener('click', () => {
+        input.checked = true;
+        input.dispatchEvent(new Event('change'));
+      });
+
+      // Portrait Image
+      const portraitWrap = element('div', 'class-portrait-wrap');
+      const img = element('img', 'class-portrait');
+      img.src = `./assets/classes/${id}-portrait.png`;
+      img.alt = cls.name;
+      portraitWrap.append(img);
+
+      // Name & Description
+      const name = element('h3', 'class-card-name font-serif', cls.name);
+      const desc = element('p', 'class-card-desc', cls.description);
+
+      // Primary Attribute Chip
+      const chip = element('span', `class-attribute-chip attr-${cls.primary}`, `${stats.attr} · ${cls.range > 3 ? 'RANGED' : 'MELEE'}`);
+
+      // Stat Bars
+      const statBars = element('div', 'class-stat-bars');
+      for (const [sLabel, sVal] of [['PWR', stats.power], ['DEF', stats.defense], ['SPD', stats.speed]]) {
+        const row = element('div', 'stat-bar-row');
+        row.append(element('span', 'stat-bar-label', sLabel));
+        const track = element('div', 'stat-track');
+        const fill = element('div', `stat-fill fill-${id}`);
+        fill.style.width = `${sVal}%`;
+        track.append(fill);
+        row.append(track);
+        statBars.append(row);
+      }
+
+      card.append(input, portraitWrap, name, desc, chip, statBars);
+      root.append(card);
+    }
   }
 
   buildAutoSell() {
     for (const [group, values] of Object.entries({ rarities: ['common', 'magic', 'rare', 'legendary'], types: ['sword', 'staff', 'bow', 'armor', 'helm', 'gloves', 'boots', 'ring'] })) {
       const root = document.getElementById(`auto-sell-${group}`);
+      if (!root) continue;
       for (const value of values) {
         const label = element('label'), input = element('input');
         input.type = 'checkbox'; input.value = value; input.name = `auto-sell-${group}`;
         label.append(input, document.createTextNode(` ${value[0].toUpperCase()}${value.slice(1)}`)); root.append(label);
       }
     }
-    document.getElementById('auto-sell-controls').addEventListener('change', () => {
+    document.getElementById('auto-sell-controls')?.addEventListener('change', () => {
       const selected = group => [...document.querySelectorAll(`input[name="auto-sell-${group}"]:checked`)].map(input => input.value);
-      const config = { enabled: document.getElementById('auto-sell-enabled').checked, rarities: selected('rarities'), types: selected('types'), currency: document.getElementById('auto-sell-currency').value };
+      const config = { enabled: document.getElementById('auto-sell-enabled')?.checked, rarities: selected('rarities'), types: selected('types'), currency: document.getElementById('auto-sell-currency')?.value };
       this.setAutoSell(config);
       this.callbacks.onAutoSellChange?.({ ...config, rarities: [...config.rarities], types: [...config.types] });
     });
@@ -104,44 +313,53 @@ export class UI {
 
   setAutoSell(config = {}) {
     this.autoSell = { enabled: Boolean(config.enabled), rarities: Array.isArray(config.rarities) ? [...config.rarities] : [], types: Array.isArray(config.types) ? [...config.types] : [], currency: ['gold', 'gems', 'diamonds'].includes(config.currency) ? config.currency : 'gold' };
-    document.getElementById('auto-sell-enabled').checked = this.autoSell.enabled;
-    for (const group of ['rarities', 'types']) for (const input of document.querySelectorAll(`input[name="auto-sell-${group}"]`)) input.checked = this.autoSell[group].includes(input.value);
-    document.getElementById('auto-sell-currency').value = this.autoSell.currency;
-    document.getElementById('auto-sell-summary').textContent = this.autoSell.enabled ? 'On · Automation only' : 'Off';
+    const enabledInput = document.getElementById('auto-sell-enabled');
+    if (enabledInput) enabledInput.checked = this.autoSell.enabled;
+    for (const group of ['rarities', 'types']) {
+      for (const input of document.querySelectorAll(`input[name="auto-sell-${group}"]`)) input.checked = this.autoSell[group].includes(input.value);
+    }
+    const currEl = document.getElementById('auto-sell-currency');
+    if (currEl) currEl.value = this.autoSell.currency;
+    const sumEl = document.getElementById('auto-sell-summary');
+    if (sumEl) sumEl.textContent = this.autoSell.enabled ? 'On · Automation only' : 'Off';
   }
 
   setShopAvailable(available) {
     const next = Boolean(available);
-    document.getElementById('shop-availability').textContent = next ? 'Ember Refuge services are open. Buy supplies, forge gear and manage your stash.' : 'Services unavailable here. Return to Ember Refuge using Character → Travel to buy, forge, sell, salvage or use your stash.';
+    const shopAvail = document.getElementById('shop-availability');
+    if (shopAvail) {
+      shopAvail.textContent = next ? 'Ember Refuge services are open. Buy supplies, forge gear and manage your stash.' : 'Services unavailable here. Return to Ember Refuge using Journey to buy, forge, sell, salvage or use your stash.';
+    }
     if (this.shopAvailable === next) return;
     this.shopAvailable = next;
     this.inventoryFingerprint = '';
     this.renderPanel();
   }
 
-  buildClasses() {
-    for (const id of ['warrior', 'mage', 'archer']) {
-      const cls = CLASSES[id];
-      const label = element('label', 'class-choice');
-      label.style.setProperty('--class-color', cls.color);
-      const input = element('input'); input.type = 'radio'; input.name = 'hero-class'; input.value = id; input.checked = id === this.selectedClass;
-      input.addEventListener('change', () => { if (input.checked) { this.selectedClass = id; this.refreshSaves(); } });
-      const copy = element('span', 'class-copy');
-      copy.append(element('strong', '', cls.name), element('span', '', cls.description), element('small', '', `${labels[cls.primary]} · ${cls.range > 3 ? 'Ranged' : 'Melee'}`));
-      label.append(input, copy); this.nodes['class-options'].append(label);
-    }
-  }
-
   refreshSaves() {
     const saved = this.callbacks.onSaveStatus?.(this.selectedClass);
-    document.getElementById('save-controls').hidden = this.state !== 'ready';
-    document.getElementById('continue-game').disabled = !saved?.ok;
-    document.getElementById('export-save').disabled = !saved?.ok;
-    document.getElementById('save-status').textContent = saved?.ok ? `Level ${saved.value.hero.level} ${CLASSES[this.selectedClass].name}${saved.recovered ? ' · backup recovered' : ' · saved'}` : 'No saved character for this calling.';
+    const saveCard = document.getElementById('save-card-preview');
+    const continueBtn = document.getElementById('continue-game');
+    const exportBtn = document.getElementById('export-save');
+    const saveStatus = document.getElementById('save-status');
+
+    if (continueBtn) continueBtn.disabled = !saved?.ok;
+    if (exportBtn) exportBtn.disabled = !saved?.ok;
+
+    if (saved?.ok) {
+      if (saveCard) saveCard.hidden = false;
+      this.text('save-card-class', CLASSES[this.selectedClass]?.name || 'Wanderer');
+      this.text('save-card-level', saved.value.hero.level);
+      if (saveStatus) saveStatus.textContent = saved.recovered ? 'Backup recovered' : 'Saved character ready';
+    } else {
+      if (saveCard) saveCard.hidden = true;
+      if (saveStatus) saveStatus.textContent = 'No saved character for this calling.';
+    }
   }
 
   trapFocus(event) {
     const root = this.state === 'inventory' ? this.nodes['inventory-overlay'] : this.nodes.modal;
+    if (!root) return;
     const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]')]
       .filter(node => node.tabIndex >= 0 && !node.closest('[hidden]') && (node.type !== 'radio' || node.checked));
     const first = controls[0], last = controls.at(-1);
@@ -152,182 +370,429 @@ export class UI {
   }
 
   selectTab(tab) {
-    if (!['character', 'inventory', 'shops', 'events'].includes(tab)) return;
+    const validTabs = ['character', 'inventory', 'shops', 'events', 'journey'];
+    if (!validTabs.includes(tab)) return;
     this.activeTab = tab;
-    for (const id of ['character', 'inventory', 'shops', 'events']) {
-      this.nodes[`${id}-panel`].hidden = tab !== id;
-      this.nodes[`${id}-tab`].setAttribute('aria-selected', String(tab === id));
-      this.nodes[`${id}-tab`].tabIndex = tab === id ? 0 : -1;
+
+    for (const id of validTabs) {
+      const panel = this.nodes[`${id}-panel`];
+      const tabBtn = this.nodes[`${id}-tab`];
+      if (panel) panel.hidden = tab !== id;
+      if (tabBtn) {
+        tabBtn.setAttribute('aria-selected', String(tab === id));
+        tabBtn.tabIndex = tab === id ? 0 : -1;
+      }
     }
   }
 
   update(hero, kills, enemyCount, paused) {
     if (!hero) return;
     this.hero = hero;
-    document.getElementById('resource').textContent=`${Math.floor(hero.resource??100)}${hero.blessingTime>0?` · Blessing ${Math.ceil(hero.blessingTime)}s`:''}`;
-    document.querySelectorAll('[data-skill]').forEach((button,index)=>{
-      const s=SKILLS[hero.classId][index], remaining=hero.skillCooldowns?.[s.id]??0;
-      button.textContent=`${index+1} · ${s.name}${remaining>0?` (${remaining.toFixed(1)}s)`:''}`;
-      button.title=`${s.cost} resolve · ${s.cooldown}s cooldown · ${s.telegraph}`;
-      button.disabled=this.state!=='playing'||remaining>0||(hero.resource??100)<s.cost;
-    });
-    document.getElementById('dodge-button').textContent=hero.dodgeCooldown>0?`Dodge (${hero.dodgeCooldown.toFixed(1)}s)`:'Dodge · Space';
-    const maxHp = Math.max(1, finite(hero.maxHp, 100)), hp = Math.max(0, Math.min(maxHp, finite(hero.hp)));
-    const xpNeeded = Math.max(1, finite(hero.xpNeeded, 100)), xp = Math.max(0, finite(hero.xp));
-    const healthPercent = `${hp / maxHp * 100}%`, xpPercent = `${Math.min(1, xp / xpNeeded) * 100}%`;
-    this.text('health-current', Math.ceil(hp)); this.text('health-max', `/ ${Math.ceil(maxHp)}`);
-    this.text('level', Math.max(1, Math.floor(finite(hero.level, 1)))); this.text('kills', Math.max(0, Math.floor(finite(kills))));
-    this.text('enemy-count', Math.max(0, Math.floor(finite(enemyCount)))); this.text('xp-text', `${Math.floor(xp)} / ${Math.floor(xpNeeded)}`);
-    for (const key of ['gold', 'gems', 'diamonds', 'dust', 'shards']) {
-      this.text(key, number(['dust','shards'].includes(key)?hero[key]:hero.currencies?.[key]));
-      this.text(`panel-${key}`, number(['dust','shards'].includes(key)?hero[key]:hero.currencies?.[key]));
+
+    // Resource Orb
+    const maxResource = Math.max(1, finite(hero.maxResource, 100));
+    const currentResource = Math.max(0, Math.min(maxResource, finite(hero.resource, 100)));
+    const resPercent = `${(currentResource / maxResource) * 100}%`;
+    const resLiquid = document.getElementById('resource-liquid');
+    if (resLiquid) {
+      resLiquid.style.height = resPercent;
+      // Per-class resource color
+      if (hero.classId === 'mage') resLiquid.style.background = 'linear-gradient(180deg, #a78bfa 0%, #7c3aed 50%, #4c1d95 100%)';
+      else if (hero.classId === 'archer') resLiquid.style.background = 'linear-gradient(180deg, #6ee7b7 0%, #059669 50%, #064e3b 100%)';
+      else resLiquid.style.background = 'linear-gradient(180deg, #fdba74 0%, #ea580c 50%, #7c2d12 100%)';
     }
-    this.text('potions', `${finite(hero.potions)}${hero.potionCooldown>0?` · ${hero.potionCooldown.toFixed(1)}s`:''}`);
-    this.nodes['potion-button'].title='Restores 45% maximum health · 4s cooldown';
-    this.nodes['potion-button'].disabled = this.state !== 'playing' || !hero.potions || hp >= maxHp || hp <= 0 || hero.potionCooldown > 0;
+    this.text('resource', Math.floor(currentResource));
+
+    // Update Skill Icons & Cooldown Sweeps
+    const skillList = SKILLS[hero.classId] || [];
+    const iconNames = SKILL_ICONS[hero.classId] || SKILL_ICONS.warrior;
+
+    document.querySelectorAll('[data-skill]').forEach((button, index) => {
+      const s = skillList[index];
+      if (!s) return;
+      const remaining = hero.skillCooldowns?.[s.id] ?? 0;
+      const iconImg = button.querySelector('img');
+      if (iconImg && iconNames[index]) {
+        const targetSrc = `./assets/icons/skills/${iconNames[index]}.png`;
+        if (!iconImg.src.endsWith(targetSrc)) iconImg.src = targetSrc;
+      }
+
+      button.title = `${s.name} (${s.cost} Resolve · ${s.cooldown}s CD)\n${s.telegraph}`;
+      button.disabled = this.state !== 'playing' || remaining > 0 || currentResource < s.cost;
+
+      const sweep = button.querySelector('.cooldown-sweep');
+      const secLabel = button.querySelector('.cooldown-seconds');
+      if (remaining > 0) {
+        if (sweep) sweep.hidden = false;
+        if (secLabel) { secLabel.hidden = false; secLabel.textContent = remaining.toFixed(1); }
+      } else {
+        if (sweep) sweep.hidden = true;
+        if (secLabel) secLabel.hidden = true;
+      }
+    });
+
+    // Dodge Button Cooldown
+    const dodgeBtn = document.getElementById('dodge-button');
+    if (dodgeBtn) {
+      const dodgeSweep = dodgeBtn.querySelector('.cooldown-sweep');
+      const dodgeSec = dodgeBtn.querySelector('.cooldown-seconds');
+      if (hero.dodgeCooldown > 0) {
+        if (dodgeSweep) dodgeSweep.hidden = false;
+        if (dodgeSec) { dodgeSec.hidden = false; dodgeSec.textContent = hero.dodgeCooldown.toFixed(1); }
+      } else {
+        if (dodgeSweep) dodgeSweep.hidden = true;
+        if (dodgeSec) dodgeSec.hidden = true;
+      }
+    }
+
+    // Health Globe
+    const maxHp = Math.max(1, finite(hero.maxHp, 100));
+    const hp = Math.max(0, Math.min(maxHp, finite(hero.hp)));
+    const xpNeeded = Math.max(1, finite(hero.xpNeeded, 100));
+    const xp = Math.max(0, finite(hero.xp));
+    const healthPercent = `${(hp / maxHp) * 100}%`;
+    const xpPercent = `${Math.min(1, xp / xpNeeded) * 100}%`;
+
+    this.text('health-current', Math.ceil(hp));
+    this.text('health-max', `/ ${Math.ceil(maxHp)}`);
+    this.text('level', Math.max(1, Math.floor(finite(hero.level, 1))));
+    this.text('kills', Math.max(0, Math.floor(finite(kills))));
+    this.text('enemy-count', Math.max(0, Math.floor(finite(enemyCount))));
+    this.text('xp-text', `${Math.floor(xp)} / ${Math.floor(xpNeeded)} XP (${Math.round((xp / xpNeeded) * 100)}%)`);
+
     const globe = this.nodes['health-globe'];
-    if (globe.style.getPropertyValue('--health') !== healthPercent) globe.style.setProperty('--health', healthPercent);
-    if (this.nodes['xp-fill'].style.width !== xpPercent) this.nodes['xp-fill'].style.width = xpPercent;
-    this.attr('health-globe', 'aria-valuenow', Math.ceil(hp)); this.attr('health-globe', 'aria-valuemax', Math.ceil(maxHp));
-    this.attr('xp-meter', 'aria-valuenow', Math.min(xp, xpNeeded)); this.attr('xp-meter', 'aria-valuemax', xpNeeded);
+    if (globe) {
+      globe.style.setProperty('--health', healthPercent);
+      globe.classList.toggle('low-health', (hp / maxHp) < 0.25);
+    }
+    if (this.nodes['xp-fill']) this.nodes['xp-fill'].style.width = xpPercent;
+
+    // Currencies
+    for (const key of ['gold', 'gems', 'diamonds', 'dust', 'shards']) {
+      const val = number(['dust', 'shards'].includes(key) ? hero[key] : hero.currencies?.[key]);
+      this.text(key, val);
+      this.text(`panel-${key}`, val);
+    }
+
+    // Potion Button
+    this.text('potions', finite(hero.potions));
+    if (this.nodes['potion-button']) {
+      this.nodes['potion-button'].disabled = this.state !== 'playing' || !hero.potions || hp >= maxHp || hp <= 0 || hero.potionCooldown > 0;
+    }
+
+    // Hero title
+    this.text('hero-class-label', CLASSES[hero.classId]?.name || 'Warrior');
+
     if (this.state === 'inventory') this.renderPanel();
-    // Inventory is an explicit state; a paused flag must never replace it.
     if (this.state === 'playing' && paused) this.setState('paused');
     else if (this.state === 'paused' && paused === false) this.setState('playing');
   }
 
   renderPanel() {
-    const hero = this.hero; if (!hero) return;
+    const hero = this.hero;
+    if (!hero) return;
+
     const fingerprint = JSON.stringify([hero.classId, hero.level, hero.stats, hero.damage, hero.maxHp, hero.armor, hero.crit, hero.speed, hero.range, hero.attackSeconds, hero.equipment, hero.inventory, hero.stash, hero.talents, hero.talentPoints, hero.statPoints, hero.currencies, hero.inventoryCapacity]);
     if (fingerprint === this.inventoryFingerprint) return;
     this.inventoryFingerprint = fingerprint;
+
     const focused = document.activeElement?.dataset.actionKey;
     this.text('panel-title', `${CLASSES[hero.classId]?.name || 'Wanderer'} · Level ${hero.level || 1}`);
     this.text('inventory-count', `${hero.inventory?.length || 0} / ${inventoryCapacity(hero)}`);
-    const stats = this.nodes['hero-stats']; stats.replaceChildren();
-    for (const [key, value] of Object.entries({ ...hero.stats, damage: hero.damage, maxHp: hero.maxHp, armor: hero.armor, crit: hero.crit, speed: hero.speed, range: hero.range, attackSeconds: hero.attackSeconds })) {
-      const pair = element('div'); pair.append(element('dt', '', labels[key] || key), element('dd', '', valueText(key, value))); stats.append(pair);
+
+    // 1. Primary Attributes
+    this.text('attr-strength-val', hero.stats?.strength ?? 10);
+    this.text('attr-intelligence-val', hero.stats?.intelligence ?? 10);
+    this.text('attr-dexterity-val', hero.stats?.dexterity ?? 10);
+    this.text('attr-vitality-val', hero.stats?.vitality ?? 10);
+
+    // 2. Combat Stats
+    const stats = this.nodes['hero-stats'];
+    if (stats) {
+      stats.replaceChildren();
+      for (const [key, value] of Object.entries({ damage: hero.damage, armor: hero.armor, maxHp: hero.maxHp, crit: hero.crit, speed: hero.speed, range: hero.range, attackSeconds: hero.attackSeconds })) {
+        const pair = element('div', 'combat-stat-row');
+        pair.append(element('dt', '', labels[key] || key), element('dd', 'tabular', valueText(key, value)));
+        stats.append(pair);
+      }
     }
-    document.getElementById('talent-list').replaceChildren();
-    const talentRoot=document.getElementById('talent-list');
-    talentRoot.append(element('p','',`${hero.talentPoints??0} talent points · ${hero.statPoints??0} attribute points`));
-    const command=(root,label,op,id)=>{const b=element('button','item-action',label); b.type='button'; b.dataset.actionKey=`${op}-${id??'all'}`; b.onclick=()=>this.callbacks.onEconomy?.(op,id); if(['buy','retrieve','refund','salvageAll'].includes(op)&&!this.shopAvailable){b.disabled=true;b.title='Return to Ember Refuge to use this service.';} root.append(b);};
-    for(const key of ['strength','intelligence','dexterity','vitality'])command(talentRoot,`+ ${key}`,'stat',key);
-    for(const node of TALENTS[hero.classId]) {
-      const row=element('article','item-card');row.append(element('h4','',`${node.name} ${hero.talents?.[node.id]??0}/3`),element('p','',`+${node.value} ${node.stat} per rank`));
-      command(row,'Learn','learn',node.id);command(row,`Refund · ${talentCost(hero)} gold`,'refund',node.id);talentRoot.append(row);
+
+    // 3. Visual Talent Tree
+    const talentRoot = document.getElementById('talent-list');
+    if (talentRoot) {
+      talentRoot.replaceChildren();
+      this.text('talent-points-chip', `${hero.talentPoints ?? 0} Points Available`);
+
+      const classTalents = TALENTS[hero.classId] || [];
+      classTalents.forEach(node => {
+        const rank = hero.talents?.[node.id] ?? 0;
+        const card = element('div', `talent-card ${rank > 0 ? 'learned' : ''}`);
+
+        const info = element('div', 'talent-card-info');
+        const title = element('h5', '', `${node.name} ${rank}/${node.maxRank}`);
+        const desc = element('p', 'talent-desc', node.description || `+${node.value} ${node.stat} per rank`);
+        info.append(title, desc);
+
+        const actions = element('div', 'talent-actions');
+        const canLearn = rank < node.maxRank && (hero.talentPoints ?? 0) > 0;
+        const learnBtn = element('button', 'btn-primary talent-btn', `Learn · ${talentCost(hero, node.id)} pts`);
+        learnBtn.type = 'button';
+        learnBtn.disabled = !canLearn;
+        learnBtn.onclick = () => this.callbacks.onEconomy?.('learn', node.id);
+        actions.append(learnBtn);
+
+        if (this.shopAvailable && rank > 0) {
+          const refundBtn = element('button', 'btn-secondary talent-btn', 'Refund');
+          refundBtn.type = 'button';
+          refundBtn.onclick = () => this.callbacks.onEconomy?.('refund', node.id);
+          actions.append(refundBtn);
+        }
+
+        card.append(info, actions);
+        talentRoot.append(card);
+      });
     }
-    const shop=document.getElementById('merchant-list');shop.replaceChildren();
-    command(shop, inventoryCapacity(hero)>=500?'Pack maximum · 500 slots':`Expand pack +${Math.min(4,500-inventoryCapacity(hero))} slots · ${inventoryExpansionCost(hero)} gold`,'expandInventory');
-    shop.lastElementChild.id='expand-inventory';shop.lastElementChild.disabled=inventoryCapacity(hero)>=500||hero.currencies.gold<inventoryExpansionCost(hero);
-    command(shop,'Salvage Unfavorited · keep Legendary gear','salvageAll');
-    shop.lastElementChild.id='salvage-unfavorited';
-    shop.lastElementChild.disabled=!this.shopAvailable||!hero.inventory.some(item=>!item.favorite&&item.rarity!=='legendary');
-    for(const slot of ['potion',...slots])command(shop,`${slot} · ${slot==='potion'?35:120*hero.level} gold`,'buy',slot);
-    const stash=document.getElementById('stash-list');stash.replaceChildren();
-    for(const item of hero.stash??[])command(stash,`Retrieve ${item.name}`,'retrieve',item.id);
-    this.nodes['equipment-list'].replaceChildren();
+
+    // 4. Paperdoll Equipment Slots Update
     for (const slot of slots) {
-      const item = hero.equipment?.[slot];
-      if (item) this.nodes['equipment-list'].append(this.itemCard(item, true));
-      else { const card = element('article', 'item-card empty-slot'); card.append(element('h4', '', `No ${slot} equipped`), element('p', '', 'Equip a find from your inventory.')); this.nodes['equipment-list'].append(card); }
+      const slotEl = document.querySelector(`.equip-slot[data-slot="${slot}"]`);
+      if (slotEl) {
+        const item = hero.equipment?.[slot];
+        if (item) {
+          const rarity = RARITIES[item.rarity] || { color: '#a7adb4', name: 'Common' };
+          slotEl.style.setProperty('--rarity-color', rarity.color);
+          slotEl.title = `${item.name} (${rarity.name} ${slot})\nClick to Unequip`;
+          slotEl.onclick = () => this.callbacks.onUnequip?.(slot);
+        } else {
+          slotEl.style.removeProperty('--rarity-color');
+          slotEl.title = `No ${slot} equipped`;
+          slotEl.onclick = null;
+        }
+      }
     }
-    this.nodes['inventory-list'].replaceChildren();
-    for (const item of filterItems(hero.inventory||[],document.getElementById('item-filter').value,document.getElementById('item-sort').value).slice(0, inventoryCapacity(hero))) this.nodes['inventory-list'].append(this.itemCard(item, false));
-    if (!hero.inventory?.length) this.nodes['inventory-list'].append(element('p', 'empty-inventory', 'Your pack is empty. Fallen enemies may leave equipment behind.'));
+
+    // 5. Merchant & Forge Shop
+    const shop = document.getElementById('merchant-list');
+    if (shop) {
+      shop.replaceChildren();
+      const command = (root, label, op, id) => {
+        const b = element('button', 'btn-secondary', label);
+        b.type = 'button';
+        b.dataset.actionKey = `${op}-${id ?? 'all'}`;
+        b.onclick = () => this.callbacks.onEconomy?.(op, id);
+        if (['buy', 'retrieve', 'refund', 'salvageAll'].includes(op) && !this.shopAvailable) {
+          b.disabled = true;
+          b.title = 'Return to Ember Refuge to use this service.';
+        }
+        root.append(b);
+      };
+
+      command(shop, inventoryCapacity(hero) >= 500 ? 'Pack Maximum · 500 Slots' : `Expand Pack +${Math.min(4, 500 - inventoryCapacity(hero))} Slots · ${inventoryExpansionCost(hero)} Gold`, 'expandInventory');
+      shop.lastElementChild.id = 'expand-inventory';
+      shop.lastElementChild.disabled = inventoryCapacity(hero) >= 500 || hero.currencies.gold < inventoryExpansionCost(hero);
+
+      command(shop, 'Salvage Unfavorited Gear', 'salvageAll');
+      shop.lastElementChild.id = 'salvage-unfavorited';
+      shop.lastElementChild.disabled = !this.shopAvailable || !hero.inventory.some(item => !item.favorite && item.rarity !== 'legendary');
+
+      for (const slot of ['potion', ...slots]) {
+        command(shop, `Buy ${slot[0].toUpperCase() + slot.slice(1)} · ${slot === 'potion' ? 35 : 120 * hero.level} Gold`, 'buy', slot);
+      }
+    }
+
+    // 6. Stash List
+    const stash = document.getElementById('stash-list');
+    if (stash) {
+      stash.replaceChildren();
+      for (const item of hero.stash ?? []) {
+        const b = element('button', 'btn-secondary', `Retrieve ${item.name}`);
+        b.onclick = () => this.callbacks.onEconomy?.('retrieve', item.id);
+        stash.append(b);
+      }
+      if (!hero.stash?.length) {
+        stash.append(element('p', 'panel-help', 'Stash is empty. Store items from your Inventory.'));
+      }
+    }
+
+    // 7. Inventory List
+    const invList = this.nodes['inventory-list'];
+    if (invList) {
+      invList.replaceChildren();
+      const filterVal = document.getElementById('item-filter')?.value || 'all';
+      const sortVal = document.getElementById('item-sort')?.value || 'rarity';
+      const filtered = filterItems(hero.inventory || [], filterVal, sortVal).slice(0, inventoryCapacity(hero));
+
+      for (const item of filtered) {
+        invList.append(this.itemCard(item, false));
+      }
+      if (!hero.inventory?.length) {
+        invList.append(element('p', 'empty-inventory', 'Your pack is empty. Fallen foes may leave equipment behind.'));
+      }
+    }
+
+    // Restore active focus if present
     if (focused) {
       const replacement = [...this.nodes['inventory-overlay'].querySelectorAll('[data-action-key]')].find(node => node.dataset.actionKey === focused && !node.disabled);
-      (replacement || this.nodes[`${this.activeTab}-tab`]).focus({ preventScroll: true });
+      (replacement || this.nodes[`${this.activeTab}-tab`])?.focus({ preventScroll: true });
     }
   }
 
   itemCard(item, equipped) {
-    const rarity = RARITIES[item.rarity] || { name: item.rarity || 'Common', color: '#a7adb4' };
-    const card = element('article', 'item-card'); card.style.setProperty('--rarity-color', rarity.color);
-    card.append(element('p', 'item-meta', `${rarity.name} · ${item.slot} · Level ${item.level || 1}${item.classId ? ` · ${CLASSES[item.classId]?.name || item.classId}` : ''}`), element('h4', '', item.name));
+    const rarity = RARITIES[item.rarity] || { name: item.rarity || 'Common', color: '#9aa3a6' };
+    const card = element('article', 'item-card');
+    card.style.setProperty('--rarity-color', rarity.color);
+
+    const meta = element('p', 'item-meta', `${rarity.name} · ${item.slot} · Level ${item.level || 1}`);
+    const title = element('h4', 'item-title', item.name);
+    card.append(meta, title);
+
     const modifiers = element('dl', 'item-modifiers');
     const current = this.hero.equipment?.[item.slot];
     const keys = new Set([...Object.keys(item.mods || {}), ...(!equipped ? Object.keys(current?.mods || {}) : [])]);
+
     for (const key of keys) {
       const value = finite(item.mods?.[key]), old = finite(current?.mods?.[key]);
       if (!value && (equipped || !old)) continue;
-      const row = element('div'); row.append(element('dt', '', labels[key] || key), element('dd', '', `${value >= 0 ? '+' : ''}${valueText(key, value)}`));
+      const row = element('div', 'item-mod-row');
+      row.append(element('dt', '', labels[key] || key), element('dd', '', `${value >= 0 ? '+' : ''}${valueText(key, value)}`));
       if (!equipped) {
         const delta = value - old;
-        row.append(element('dd', `item-delta ${delta > 0 ? 'positive' : delta < 0 ? 'negative' : ''}`, `${delta > 0 ? '+' : ''}${valueText(key, delta)} vs equipped`));
+        row.append(element('dd', `item-delta ${delta > 0 ? 'positive' : delta < 0 ? 'negative' : ''}`, `${delta > 0 ? '+' : ''}${valueText(key, delta)}`));
       }
       modifiers.append(row);
     }
     card.append(modifiers);
-    if(item.legendary)card.append(element('p','legendary-property',LEGENDARIES[item.legendary]));
-    if(item.upgrades)card.append(element('p','',`Forged +${item.upgrades}`));
-    const button = element('button', 'item-action', equipped ? 'Unequip' : 'Equip'); button.type = 'button';
-    button.dataset.actionKey = equipped ? `unequip-${item.slot}` : `equip-${item.id}`;
-    button.disabled = equipped && (this.hero.inventory?.length || 0) >= inventoryCapacity(this.hero);
-    if (button.disabled) button.title = 'Inventory full — equip a different item to swap.';
-    button.addEventListener('click', () => equipped ? this.callbacks.onUnequip?.(item.slot) : this.callbacks.onEquip?.(item.id));
-    card.append(button);
-    if(!equipped) {
-      const cost=craftCost(item), reroll=rerollCost(item);
-      for(const [op,label] of [['favorite',item.favorite?'Unfavorite':'Favorite'],['stash','Store'],['sell',`Sell · ${saleValue(item)} gold`],['salvage','Salvage for gems'],['delete','Delete permanently'],['reroll',`Reroll bonus · ${reroll.gold} gold / ${reroll.gems} gems`],['upgrade',`Upgrade +${(item.upgrades??0)+1} · ${cost.gold} gold / ${cost.gems} gems / ${cost.diamonds} diamonds`]]) {
-        const action=element('button',`item-action${op==='delete'?' delete-action':''}`,label);action.type='button';action.dataset.actionKey=`${op}-${item.id}`;action.onclick=()=>this.callbacks.onEconomy?.(op,item.id);
-        if(['stash','sell','salvage','reroll','upgrade'].includes(op)&&!this.shopAvailable){action.disabled=true;action.title='Return to Ember Refuge to use this service.';}
-        if(item.favorite&&['sell','salvage','delete'].includes(op)){action.disabled=true;action.title='Unfavorite this item first.';}
-        card.append(action);
+
+    if (item.legendary) card.append(element('p', 'legendary-property', LEGENDARIES[item.legendary]));
+    if (item.upgrades) card.append(element('p', 'eyebrow', `Forged +${item.upgrades}`));
+
+    const actionsRow = element('div', 'item-actions-row');
+    const equipBtn = element('button', 'btn-secondary', equipped ? 'Unequip' : 'Equip');
+    equipBtn.type = 'button';
+    equipBtn.dataset.actionKey = equipped ? `unequip-${item.slot}` : `equip-${item.id}`;
+    equipBtn.disabled = equipped && (this.hero.inventory?.length || 0) >= inventoryCapacity(this.hero);
+    equipBtn.onclick = () => equipped ? this.callbacks.onUnequip?.(item.slot) : this.callbacks.onEquip?.(item.id);
+    actionsRow.append(equipBtn);
+
+    if (!equipped) {
+      const cost = craftCost(item);
+      for (const [op, label] of [
+        ['favorite', item.favorite ? 'Unfavorite' : 'Favorite'],
+        ['stash', 'Store'],
+        ['sell', `Sell · ${saleValue(item)}g`],
+        ['salvage', 'Salvage'],
+        ['upgrade', `Upgrade +${(item.upgrades ?? 0) + 1}`],
+        ['reroll', `Reroll · ${rerollCost(item).gold}g`],
+        ['delete', 'Delete permanently']
+      ]) {
+        const action = element('button', `btn-secondary ${op === 'delete' ? 'delete-action' : ''}`, label);
+        action.type = 'button';
+        action.dataset.actionKey = `${op}-${item.id}`;
+        action.onclick = () => this.callbacks.onEconomy?.(op, item.id);
+        if (['stash', 'sell', 'salvage', 'upgrade', 'reroll'].includes(op) && !this.shopAvailable) {
+          action.disabled = true;
+          action.title = 'Return to Ember Refuge to use this service.';
+        }
+        if (item.favorite && ['sell', 'salvage', 'delete'].includes(op)) {
+          action.disabled = true;
+          action.title = 'Unfavorite this item first.';
+        }
+        actionsRow.append(action);
       }
     }
+
+    card.append(actionsRow);
     return card;
   }
 
   setBackgroundAutomation(enabled) {
     const button = this.nodes['background-toggle'];
+    if (!button) return;
     button.setAttribute('aria-pressed', String(Boolean(enabled)));
-    button.textContent = enabled ? 'Hidden automation on' : 'Run while hidden';
-    button.title = enabled ? 'Automation continues when this tab is hidden' : 'Allow automation to continue when this tab is hidden';
+    button.textContent = enabled ? 'Running in background' : 'Run in background';
   }
 
   setMode(mode) {
-    const automatic=mode==='automation';
-    document.getElementById('mode-label').textContent=automatic?'Automation':'Manual';
-    const button=document.getElementById('mode-toggle');button.textContent=automatic?'Switch to manual':'Enable automation';button.setAttribute('aria-pressed',String(automatic));
-    document.getElementById('mode-instruction').textContent=automatic?'Pursues foes and collectible loot · 1/2/3/4: skills · Switch to take control':'Left click: move · Right hold: attack · Click loot: collect · E: interact';
+    const automatic = mode === 'automation';
+    const button = document.getElementById('mode-toggle');
+    if (button) {
+      button.setAttribute('aria-pressed', String(automatic));
+      const span = button.querySelector('span:last-child');
+      if (span) span.textContent = automatic ? 'MANUAL PLAY' : 'AUTO-PLAY';
+    }
+    const eyebrow = document.getElementById('mode-instruction-eyebrow');
+    if (eyebrow) {
+      eyebrow.textContent = automatic ? 'Automation pursues foes and loot' : 'Steel answers the darkness';
+    }
   }
-  setTeleport(remaining,destination) {
-    const node=document.getElementById('teleport-status');
-    const text=`Teleporting to ${destination} · ${Math.ceil(remaining)}s`;
-    if(node.textContent!==text)node.textContent=text;
+
+  setTeleport(remaining, destination) {
+    const node = document.getElementById('teleport-status');
+    if (!node) return;
+    node.textContent = `Traveling to ${destination} · ${Math.ceil(remaining)}s`;
   }
+
   setState(state) {
     if (!['ready', 'playing', 'paused', 'dead', 'inventory', 'teleporting'].includes(state) || state === this.state) return;
-    this.state = state; document.body.dataset.state = state;
+    this.state = state;
+    document.body.dataset.state = state;
     this.refreshSaves();
+
     const playing = state === 'playing', inventory = state === 'inventory';
-    this.nodes.modal.hidden = playing || inventory || state === 'teleporting'; this.nodes['inventory-overlay'].hidden = !inventory;
-    document.getElementById('teleport-status').hidden=state!=='teleporting';
-    document.getElementById('mode-toggle').disabled=!playing;
-    this.nodes['pause-button'].disabled = !playing;
-    this.nodes['background-toggle'].disabled = !playing;
-    this.nodes.hud.inert = !playing;
-    document.getElementById('game').inert = !playing;
+    if (this.nodes.modal) this.nodes.modal.hidden = playing || inventory || state === 'teleporting';
+    if (this.nodes['inventory-overlay']) this.nodes['inventory-overlay'].hidden = !inventory;
+    const teleport = document.getElementById('teleport-status');
+    if (teleport) teleport.hidden = state !== 'teleporting';
+
+    const modeToggle = document.getElementById('mode-toggle');
+    if (modeToggle) modeToggle.disabled = !playing;
+    if (this.nodes['pause-button']) this.nodes['pause-button'].disabled = !playing;
+    if (this.nodes['background-toggle']) this.nodes['background-toggle'].disabled = !playing;
+    if (this.nodes.hud) this.nodes.hud.inert = !playing;
+    const gameCanvas = document.getElementById('game');
+    if (gameCanvas) gameCanvas.inert = !playing;
+
     if (state === 'teleporting') { document.activeElement?.blur(); return; }
-    if (playing) { document.getElementById('game').focus({ preventScroll: true }); return; }
-    if (inventory) { this.renderPanel(); this.nodes[`${this.activeTab}-tab`].focus({ preventScroll: true }); return; }
-    this.nodes['class-selection'].hidden = state !== 'ready';
+    if (playing) { gameCanvas?.focus({ preventScroll: true }); return; }
+    if (inventory) { this.renderPanel(); this.nodes[`${this.activeTab}-tab`]?.focus({ preventScroll: true }); return; }
+
+    if (this.nodes['class-selection']) this.nodes['class-selection'].hidden = state !== 'ready';
+
     const copy = {
-      ready: ['A light where none remains', 'ASHEN VEIL', 'Choose your calling and begin in Ember Refuge.\nOpen Character to travel, track quests and claim rewards. Defeat three guardians to unlock expeditions.', 'Begin journey', 'Manual: left click to move · Hold right mouse to attack · E Interact · 1/2/3 Skills · Space Dodge · C Character · I Inventory · B Shops · Q Potion'],
+      ready: ['A light where none remains', 'ASHEN VEIL', 'Choose your calling and begin in Ember Refuge.\nOpen Character to travel, track quests and claim rewards. Defeat three guardians to unlock expeditions.', 'Begin journey', 'Manual: left click to move · Hold right mouse to attack · E Interact · 1/2/3/4 Skills · Space Dodge · C Character · I Inventory · B Shops · Q Potion'],
       paused: ['A moment between shadows', 'THE VEIL WAITS', 'Rest your weapon, wanderer.\nThe world will be here when you return.', 'Resume journey', 'Your journey is paused.'],
       dead: ['Even embers fall to ash', 'YOU HAVE FALLEN', 'Return to Ember Refuge with your equipment and progress intact.\nDeath costs 10% of carried gold, up to 500 gold.', 'Return to refuge', 'Active encounters and expedition progress reset.'],
     }[state];
-    for (const [index, id] of ['modal-eyebrow', 'modal-title', 'modal-description', 'modal-action', 'modal-hint'].entries()) this.text(id, copy[index]);
-    this.nodes['modal-description'].style.whiteSpace = 'pre-line'; this.nodes['modal-action'].focus({ preventScroll: true });
+
+    if (copy) {
+      for (const [index, id] of ['modal-eyebrow', 'modal-title', 'modal-description', 'modal-action', 'modal-hint'].entries()) {
+        this.text(id, copy[index]);
+      }
+    }
+
+    if (this.nodes['modal-action']) this.nodes['modal-action'].focus({ preventScroll: true });
   }
 
   announce(text) {
-    clearTimeout(this.announcementTimer); this.text('announcement', text);
-    this.text('panel-status', text); this.nodes['panel-status'].hidden = !text;
-    this.nodes.announcement.classList.toggle('visible', Boolean(text));
-    if (text) this.announcementTimer = setTimeout(() => this.nodes.announcement.classList.remove('visible'), 2800);
+    clearTimeout(this.announcementTimer);
+    this.text('announcement', text);
+    this.text('panel-status', text);
+    if (this.nodes['panel-status']) this.nodes['panel-status'].hidden = !text;
+    if (this.nodes.announcement) {
+      this.nodes.announcement.classList.toggle('visible', Boolean(text));
+      if (text) this.announcementTimer = setTimeout(() => this.nodes.announcement.classList.remove('visible'), 2800);
+    }
   }
-  text(id, value) { const text = String(value); if (this.nodes[id].textContent !== text) this.nodes[id].textContent = text; }
-  attr(id, name, value) { const text = String(value); if (this.nodes[id].getAttribute(name) !== text) this.nodes[id].setAttribute(name, text); }
+
+  text(id, value) {
+    const el = document.getElementById(id);
+    const text = String(value);
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+
+  attr(id, name, value) {
+    const el = document.getElementById(id);
+    const text = String(value);
+    if (el && el.getAttribute(name) !== text) el.setAttribute(name, text);
+  }
 }
