@@ -56,7 +56,7 @@ export class UI {
       'character-button', 'inventory-button', 'shops-button', 'shops-tab', 'shops-panel', 'potion-button', 'potions', 'gold', 'gems', 'diamonds', 'dust', 'shards',
       'panel-status', 'panel-gold', 'panel-gems', 'panel-diamonds', 'panel-dust', 'panel-shards',
       'inventory-overlay', 'panel-title', 'panel-close', 'character-tab', 'inventory-tab',
-      'events-button', 'events-tab', 'events-panel', 'journey-tab', 'journey-panel', 'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
+      'events-button', 'events-tab', 'events-panel', 'journey-button', 'journey-tab', 'journey-panel', 'goto-journey-btn', 'character-panel', 'inventory-panel', 'hero-stats', 'equipment-list', 'inventory-list', 'inventory-count',
     ].map(id => [id, document.getElementById(id)]));
 
     for (const id of ['item-filter', 'item-sort']) {
@@ -118,6 +118,7 @@ export class UI {
     this.nodes['potion-button']?.addEventListener('click', () => this.callbacks.onPotion?.());
     this.nodes['panel-close']?.addEventListener('click', () => this.callbacks.onPanel?.());
     this.nodes['inventory-overlay']?.addEventListener('click', event => { if (event.target === this.nodes['inventory-overlay']) this.callbacks.onPanel?.(); });
+    this.nodes['goto-journey-btn']?.addEventListener('click', () => this.selectTab('journey'));
 
     this.setState('ready');
   }
@@ -562,6 +563,7 @@ export class UI {
           const rarity = RARITIES[item.rarity] || { color: '#a7adb4', name: 'Common' };
           slotEl.style.setProperty('--rarity-color', rarity.color);
           slotEl.title = `${item.name} (${rarity.name} ${slot})\nClick to Unequip`;
+          slotEl.dataset.actionKey = `unequip-${slot}`;
           slotEl.onclick = () => this.callbacks.onUnequip?.(slot);
         } else {
           slotEl.style.removeProperty('--rarity-color');

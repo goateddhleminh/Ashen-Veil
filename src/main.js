@@ -260,6 +260,7 @@ try {
     if (event.code === 'KeyC' || event.code === 'KeyI') { event.preventDefault(); ui.selectTab(event.code === 'KeyC' ? 'character' : 'inventory'); togglePanel(); }
     if(event.code==='KeyJ'){event.preventDefault();ui.selectTab('events');togglePanel();}
     if(event.code==='KeyB'){event.preventDefault();ui.selectTab('shops');togglePanel();}
+    if(event.code==='KeyM'){event.preventDefault();ui.selectTab('journey');togglePanel();}
     if (event.code === 'KeyQ') { event.preventDefault(); potion(); }
     if (event.code === 'KeyE' && state === 'playing') { event.preventDefault(); interact(); }
   });

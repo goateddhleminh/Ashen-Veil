@@ -232,6 +232,12 @@
         <span id="events-ready-dot" class="dock-badge" hidden aria-label="Reward ready"></span>
       </button>
 
+      <button id="journey-button" class="dock-btn" type="button" title="Journey & Travel [M]">
+        <img src="./assets/svg/menu-journey.svg" alt=""/>
+        <kbd class="keycap">M</kbd>
+        <span class="dock-btn-label">Journey</span>
+      </button>
+
       <button id="hud-settings-btn" class="dock-btn" type="button" title="Settings">
         <img src="./assets/svg/menu-settings.svg" alt=""/>
         <span class="dock-btn-label">Options</span>
@@ -384,30 +390,30 @@
               <img src="./assets/paperdoll-silhouette.png" class="paperdoll-silhouette" alt="Character silhouette"/>
 
               <!-- Paperdoll Equipment Slots -->
-              <div class="equip-slot slot-helm" data-slot="helm" title="Helm">
+              <button class="equip-slot slot-helm" data-slot="helm" data-action-key="unequip-helm" type="button" title="Helm">
                 <img src="./assets/svg/slot-helm.svg" alt="Helm"/>
-              </div>
-              <div class="equip-slot slot-amulet" data-slot="amulet" title="Amulet">
+              </button>
+              <button class="equip-slot slot-amulet" data-slot="amulet" data-action-key="unequip-amulet" type="button" title="Amulet">
                 <img src="./assets/svg/slot-amulet.svg" alt="Amulet"/>
-              </div>
-              <div class="equip-slot slot-weapon" data-slot="weapon" title="Main Hand Weapon">
+              </button>
+              <button class="equip-slot slot-weapon" data-slot="weapon" data-action-key="unequip-weapon" type="button" title="Main Hand Weapon">
                 <img src="./assets/svg/slot-weapon.svg" alt="Weapon"/>
-              </div>
-              <div class="equip-slot slot-chest" data-slot="armor" title="Chest Armor">
+              </button>
+              <button class="equip-slot slot-chest" data-slot="armor" data-action-key="unequip-armor" type="button" title="Chest Armor">
                 <img src="./assets/svg/slot-chest.svg" alt="Armor"/>
-              </div>
-              <div class="equip-slot slot-offhand" data-slot="offhand" title="Offhand / Shield">
+              </button>
+              <button class="equip-slot slot-offhand" data-slot="offhand" data-action-key="unequip-offhand" type="button" title="Offhand / Shield">
                 <img src="./assets/svg/slot-offhand.svg" alt="Offhand"/>
-              </div>
-              <div class="equip-slot slot-gloves" data-slot="gloves" title="Gloves">
+              </button>
+              <button class="equip-slot slot-gloves" data-slot="gloves" data-action-key="unequip-gloves" type="button" title="Gloves">
                 <img src="./assets/svg/slot-gloves.svg" alt="Gloves"/>
-              </div>
-              <div class="equip-slot slot-belt" data-slot="ring" title="Ring">
+              </button>
+              <button class="equip-slot slot-belt" data-slot="ring" data-action-key="unequip-ring" type="button" title="Ring">
                 <img src="./assets/svg/slot-ring.svg" alt="Ring"/>
-              </div>
-              <div class="equip-slot slot-boots" data-slot="boots" title="Boots">
+              </button>
+              <button class="equip-slot slot-boots" data-slot="boots" data-action-key="unequip-boots" type="button" title="Boots">
                 <img src="./assets/svg/slot-boots.svg" alt="Boots"/>
-              </div>
+              </button>
             </div>
 
             <!-- Dynamic Equipment Items List (for compatibility) -->
@@ -484,10 +490,16 @@
               <div id="talent-list" class="talent-nodes-canvas"></div>
             </div>
 
-            <!-- World Expeditions & Travel -->
-            <div class="journey-section-wrap" style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(201, 164, 92, 0.25);">
-              <span class="eyebrow">WORLD EXPEDITIONS & CAMPAIGN TRAVEL</span>
-              <div id="journey-list" class="journey-list-container" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
+            <!-- World Travel Fast Link -->
+            <div class="goto-journey-card">
+              <div>
+                <span class="eyebrow">WORLD EXPEDITIONS & CAMPAIGN</span>
+                <p class="goto-journey-desc">Travel between zones, adjust difficulty, or enter endgame expeditions.</p>
+              </div>
+              <button id="goto-journey-btn" class="btn-secondary" type="button">
+                <span>World Map [M]</span>
+                <span aria-hidden="true">→</span>
+              </button>
             </div>
           </div>
         </section>
@@ -546,14 +558,29 @@
         </section>
 
         <!-- 4. EVENTS TAB -->
-        <section id="events-panel" class="panel-content" role="tabpanel" aria-labelledby="events-tab" hidden>
+        <section id="events-panel" class="panel-content events-tab-layout" role="tabpanel" aria-labelledby="events-tab" hidden>
+          <div class="events-header-banner">
+            <div>
+              <span class="eyebrow">CHALLENGES & REPUTATION</span>
+              <h3 class="panel-section-title">REALM EVENTS & MILESTONES</h3>
+              <p class="panel-help">Complete seasonal objectives, conquer realm zones, and ascend the Infernal Tower for legendary rewards.</p>
+            </div>
+          </div>
           <div id="events-list"></div>
         </section>
 
         <!-- 5. JOURNEY TAB -->
-        <section id="journey-panel" class="panel-content" role="tabpanel" aria-labelledby="journey-tab" hidden>
-          <span class="eyebrow">WORLD EXPEDITIONS & CAMPAIGN</span>
-          <p class="panel-help" style="margin-top: 10px;">Select your journey destination, active bounties, and campaign tier in the Character tab.</p>
+        <section id="journey-panel" class="panel-content journey-tab-layout" role="tabpanel" aria-labelledby="journey-tab" hidden>
+          <div class="journey-header-banner">
+            <div>
+              <span class="eyebrow">WORLD EXPEDITIONS & CAMPAIGN</span>
+              <h3 class="panel-section-title">SANCTUM WAYPOINTS & TRAVEL</h3>
+              <p class="panel-help">Select a destination to travel across the realm, adjust campaign difficulty within Ember Refuge, or embark on high-tier Endgame Expeditions.</p>
+            </div>
+          </div>
+          <div class="journey-section-wrap">
+            <div id="journey-list" class="journey-list-container"></div>
+          </div>
         </section>
       </div>
 
