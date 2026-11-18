@@ -73,7 +73,8 @@ export class UI {
     const interactiveRoots = [
       this.nodes.modal, this.nodes['inventory-overlay'], this.nodes['pause-button'],
       document.querySelector('.hero-controls'), document.querySelector('.combat-hud'),
-      document.getElementById('settings-modal'), document.getElementById('hud-settings-btn')
+      document.getElementById('settings-modal'), document.getElementById('hud-settings-btn'),
+      document.querySelector('.top-right-dock'), document.getElementById('hud-quest-tracker')
     ].filter(Boolean);
 
     for (const root of interactiveRoots) {

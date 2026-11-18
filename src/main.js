@@ -220,7 +220,19 @@ try {
   const normalBar = enemies[0].fill.material;
   const championBar = new THREE.MeshStandardMaterial({ color: 0x6ba9df });
   const eliteBar = new THREE.MeshStandardMaterial({ color: 0xddb34b });
-  function refresh() { ui.setShopAvailable(campaign.region==='refuge'&&!towerArena); renderJourney(); eventsUI.render(campaign.events,hero,{...eventContext(),towerReady:!!towerArena?.ready});eventsUI.updateHud(campaign.events); ui.update(hero, kills, enemies.filter(e => e.active).length, state === 'paused'); }
+  function claimRegionalQuest(questId) {
+    if (!['playing', 'inventory'].includes(state)) return;
+    const result = claimQuestReward(campaign, questId);
+    if (result.ok) {
+      hero.currencies.gold += result.reward.gold;
+      hero.currencies.gems += result.reward.gems;
+      combat.grantXP(hero, result.reward.xp);
+      persist();
+    }
+    ui.announce(result.message);
+    refresh();
+  }
+  function refresh() { ui.setShopAvailable(campaign.region==='refuge'&&!towerArena); renderJourney(); eventsUI.render(campaign.events,hero,{...eventContext(),towerReady:!!towerArena?.ready});eventsUI.updateHud(campaign.events,Date.now(),campaign,claimRegionalQuest); ui.update(hero, kills, enemies.filter(e => e.active).length, state === 'paused'); }
   function action(fn) { if (state !== 'playing' && state !== 'inventory') return; ui.announce(fn()); persist(); refresh(); }
   function economyAction(op,id) {
     if(state!=='inventory') return;
@@ -290,7 +302,7 @@ try {
       const b=document.createElement('button');const claimed=campaign.claimedRewards.includes(quest.id);
       b.textContent=`${quest.name} · ${campaign.questProgress[quest.id]??0}/${quest.target} · ${claimed?'Claimed':`${quest.gold} gold + ${quest.xp} XP`}`;
       b.disabled=claimed||(campaign.questProgress[quest.id]??0)<quest.target;
-      b.onclick=()=>{const result=claimQuestReward(campaign,quest.id);if(result.ok){hero.currencies.gold+=result.reward.gold;hero.currencies.gems+=result.reward.gems;combat.grantXP(hero,result.reward.xp);persist();}ui.announce(result.message);refresh();};root.append(b);
+      b.onclick=()=>claimRegionalQuest(quest.id);root.append(b);
     }
   }
   function rewardRun(result){if(result.ok){for(const [key,value] of Object.entries(result.reward))hero.currencies[key]+=value;persist();}ui.announce(result.message);refresh();}
@@ -369,7 +381,7 @@ try {
     mode='manual'; backgroundAutomation=false; engine.backgroundSimulation=false; ui.setMode(mode); ui.setBackgroundAutomation(false); teleportRemaining=0; pendingTravel=null;
     arrive('refuge'); input.setEnabled(true);
     ui.setState(state); ui.announce('Ember Refuge · Open Character to choose your destination.');
-    ui.update(hero, kills, enemies.filter(e => e.active).length, false);
+    refresh();
   }
   function recover(){
     if(state!=='dead')return;
@@ -468,7 +480,7 @@ try {
     if (!hero.alive) { finishTower();const lost=applyDeathPenalty(hero);persist(); state = 'dead'; clearActions(); input.setEnabled(false); ui.setState(state); ui.announce(`Lost ${lost} gold. Equipment and progress preserved.`);marker.visible = false; }
     hudTimer += dt;
     if (hudTimer > .08 || state === 'dead') {
-      hudTimer = 0; updateObjective();eventsUI.updateHud(campaign.events); ui.update(hero, kills, enemies.filter(e => e.active).length, false);
+      hudTimer = 0; updateObjective();eventsUI.updateHud(campaign.events,Date.now(),campaign,claimRegionalQuest); ui.update(hero, kills, enemies.filter(e => e.active).length, false);
     }
   }
   function render(dt) {
